@@ -10,7 +10,7 @@ interface LockerCardProps {
 
 /**
  * Operating status and availability are separate concerns: "Closed" means the
- * site isn't operating at all, while "No availability" means it's open but
+ * site isn't operating at all, while "Fully booked" means it's open but
  * every compartment is taken. Only one badge is shown, with Closed winning —
  * if the site is shut, its availability isn't the useful information.
  */
@@ -19,7 +19,7 @@ function statusChip(locker: LockerListItem) {
     return { label: "Closed", color: "default" as const, variant: "outlined" as const };
   }
   if (locker.isFullyBooked) {
-    return { label: "No availability", color: "warning" as const, variant: "filled" as const };
+    return { label: "Fully booked", color: "warning" as const, variant: "filled" as const };
   }
   return { label: "Open", color: "success" as const, variant: "filled" as const };
 }

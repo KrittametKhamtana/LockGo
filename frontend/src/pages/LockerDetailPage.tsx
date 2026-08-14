@@ -46,7 +46,7 @@ export function LockerDetailPage() {
           {!isOpen ? (
             <Chip size="small" label="Closed" variant="outlined" />
           ) : locker.isFullyBooked ? (
-            <Chip size="small" label="No availability" color="warning" />
+            <Chip size="small" label="Fully booked" color="warning" />
           ) : (
             <Chip size="small" label="Open" color="success" />
           )}
