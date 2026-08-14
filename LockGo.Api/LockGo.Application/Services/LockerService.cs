@@ -28,12 +28,14 @@ public class LockerService : ILockerService
                 ? HaversineDistanceKm(query.Lat!.Value, query.Lng!.Value, locker.Lat, locker.Lng)
                 : (double?)null;
 
-            // minPrice/availableCompartmentCount reflect only the requested
-            // size when one was given — otherwise a "Small" search could show
-            // a locker's Large price or count compartments the user didn't ask for.
-            var relevantCompartments = hasSizeFilter
-                ? locker.Compartments.Where(c => c.Size == sizeFilter).ToList()
-                : locker.Compartments;
+            var sizeAvailability = BuildSizeAvailability(locker);
+
+            // When a size filter is active, price/count headline figures describe
+            // only that size — otherwise a "Small" search would show the locker's
+            // Large price and count compartments the user didn't ask about.
+            var relevant = hasSizeFilter
+                ? sizeAvailability.Where(s => s.Size == sizeFilter.ToString()).ToList()
+                : sizeAvailability;
 
             return new LockerListItemDto(
                 locker.Id,
@@ -43,8 +45,10 @@ public class LockerService : ILockerService
                 locker.Lng,
                 locker.OperatingStatus.ToString(),
                 distanceKm,
-                relevantCompartments.Count > 0 ? relevantCompartments.Min(c => c.Price) : 0m,
-                relevantCompartments.Count(c => c.Status == CompartmentStatus.Available));
+                relevant.Count > 0 ? relevant.Min(s => s.Price) : 0m,
+                relevant.Sum(s => s.AvailableCount),
+                sizeAvailability,
+                sizeAvailability.Sum(s => s.AvailableCount) == 0);
         });
 
         if (hasOrigin && query.MaxDistanceKm.HasValue)
@@ -62,19 +66,45 @@ public class LockerService : ILockerService
         var locker = await _lockerRepository.GetByIdAsync(id, ct)
             ?? throw new NotFoundException("LOCKER_NOT_FOUND", $"Locker '{id}' was not found.");
 
-        return MapToDetailDto(locker);
+        var sizeAvailability = BuildSizeAvailability(locker);
+
+        return new LockerDetailDto(
+            locker.Id,
+            locker.Name,
+            locker.Address,
+            locker.Lat,
+            locker.Lng,
+            locker.OperatingStatus.ToString(),
+            sizeAvailability,
+            sizeAvailability.Sum(s => s.AvailableCount) == 0);
     }
 
-    private static LockerDetailDto MapToDetailDto(Locker locker) => new(
-        locker.Id,
-        locker.Name,
-        locker.Address,
-        locker.Lat,
-        locker.Lng,
-        locker.OperatingStatus.ToString(),
-        locker.Compartments
-            .Select(c => new CompartmentDto(c.Id, c.Size.ToString(), c.Price, c.Status.ToString()))
-            .ToList());
+    /// <summary>
+    /// Groups a locker's compartments by size. Availability is derived from live
+    /// Reservation rows (loaded by the repository) rather than the denormalized
+    /// Compartment.Status column, so an expired-but-not-yet-swept reservation
+    /// correctly frees its compartment — matching the write path's definition of
+    /// "available" instead of drifting from it.
+    /// Sizes with no compartments at all are omitted, which is what lets the UI
+    /// show that a location simply doesn't offer Large.
+    /// </summary>
+    private static List<CompartmentSizeAvailabilityDto> BuildSizeAvailability(Locker locker)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        return locker.Compartments
+            .GroupBy(c => c.Size)
+            .OrderBy(g => g.Key)
+            .Select(group => new CompartmentSizeAvailabilityDto(
+                group.Key.ToString(),
+                group.Min(c => c.Price),
+                group.Count(c => !HasActiveReservation(c, now)),
+                group.Count()))
+            .ToList();
+    }
+
+    private static bool HasActiveReservation(Compartment compartment, DateTimeOffset now) =>
+        compartment.Reservations.Any(r => r.Status == ReservationStatus.Active && r.EndTime > now);
 
     /// <summary>Great-circle distance in km — real math, but the input coordinates are manually supplied (no device GPS/geocoding in this scope).</summary>
     private static double HaversineDistanceKm(double lat1, double lng1, double lat2, double lng2)

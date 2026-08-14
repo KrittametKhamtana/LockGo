@@ -44,13 +44,16 @@ public class EfUnitOfWork : IUnitOfWork
             catch (DbUpdateConcurrencyException)
             {
                 // Two genuinely different requests (not a double-click replay — different
-                // idempotency keys) both passed the overlap check before either committed.
-                // Postgres serializes their compartment-status UPDATEs; the loser's xmin
-                // is stale, EF reports 0 rows affected here. This is the actual mutual
-                // exclusion for rule 2 (no double-booking) — the earlier overlap read
-                // alone can't guarantee it under READ COMMITTED.
+                // idempotency keys) both picked this same compartment before either
+                // committed. Postgres serializes their UPDATEs; the loser's xmin is stale,
+                // EF reports 0 rows affected here. This is the actual mutual exclusion for
+                // rule 2 (no double-booking) — the earlier availability read alone can't
+                // guarantee it under READ COMMITTED.
+                //
+                // Deliberately NOT a NO_AVAILABILITY conflict: a sibling compartment of
+                // the same size may still be free. ReservationService retries on this.
                 await transaction.RollbackAsync(ct);
-                throw new ConflictException("NO_AVAILABILITY", "This compartment was just booked by another request.");
+                throw new CompartmentClaimConflictException();
             }
             catch (DbUpdateException ex) when (IsIdempotencyKeyUniqueViolation(ex))
             {

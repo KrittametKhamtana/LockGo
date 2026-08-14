@@ -25,7 +25,7 @@ public class LockersApiTests : IClassFixture<LockGoWebApplicationFactory>, IAsyn
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task GetLockers_ReturnsSeededLockers()
+    public async Task GetLockers_ReturnsSeededLockersWithPerSizeAvailability()
     {
         var response = await _client.GetAsync("/api/lockers");
 
@@ -34,49 +34,104 @@ public class LockersApiTests : IClassFixture<LockGoWebApplicationFactory>, IAsyn
         var lockers = await response.Content.ReadFromJsonAsync<List<LockerListItemDto>>();
         lockers.Should().NotBeNull();
         lockers!.Should().NotBeEmpty();
-        lockers.Should().OnlyContain(l => l.AvailableCompartmentCount >= 0);
+        lockers.Should().OnlyContain(l => l.SizeAvailability.Count > 0);
+        // Seed data deliberately gives some lockers several compartments of one size.
+        lockers.Should().Contain(l => l.SizeAvailability.Any(s => s.TotalCount > 1));
     }
 
     [Fact]
-    public async Task GetLockers_FilteredBySize_OnlyReturnsLockersOfferingThatSize()
+    public async Task GetLockers_OmitsSizesTheLockerDoesNotOffer()
     {
-        var response = await _client.GetAsync("/api/lockers?size=L");
+        // Riverside is seeded with Small + Medium only — the UI relies on the
+        // missing entry to show that Large simply isn't offered there.
+        var lockers = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?search=Riverside");
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var riverside = lockers.Should().ContainSingle().Subject;
+        riverside.SizeAvailability.Select(s => s.Size).Should().BeEquivalentTo(["S", "M"]);
+    }
 
-        var lockers = await response.Content.ReadFromJsonAsync<List<LockerListItemDto>>();
-        lockers.Should().NotBeNull();
-        lockers!.Should().NotBeEmpty();
+    [Fact]
+    public async Task GetLockers_SearchMatchesNameOrAddressCaseInsensitively()
+    {
+        var byName = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?search=chatuchak");
+        var byAddress = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?search=silom");
+
+        byName.Should().ContainSingle(l => l.Name.Contains("Chatuchak"));
+        byAddress.Should().ContainSingle(l => l.Address.Contains("Silom"));
+    }
+
+    [Fact]
+    public async Task GetLockers_SearchWithNoMatches_ReturnsEmptyList()
+    {
+        var lockers = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?search=NoSuchPlaceExists");
+
+        lockers.Should().BeEmpty();
     }
 
     [Fact]
     public async Task GetLockers_FilteredBySizeAndAvailability_ExcludesLockerWhoseOnlyAvailableCompartmentIsADifferentSize()
     {
-        // A locker with its Small compartment occupied but Medium/Large still
-        // available must NOT show up for "available Small" — size and
-        // availability have to be true of the SAME compartment, not checked
-        // independently (that was the bug: two separate Any() calls let an
-        // available-but-wrong-size compartment satisfy the availability half).
+        // Size and availability have to be true of the SAME compartment, not
+        // checked independently — that was a real bug: two separate Any() calls
+        // let an available-but-wrong-size compartment satisfy the availability half.
         Guid lockerId;
         using (var scope = _factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<LockGoDbContext>();
-            var locker = await db.Lockers.Include(l => l.Compartments).FirstAsync();
+            var locker = await db.Lockers
+                .Include(l => l.Compartments)
+                .FirstAsync(l => l.Compartments.Any(c => c.Size == CompartmentSize.S)
+                              && l.Compartments.Any(c => c.Size == CompartmentSize.M));
             lockerId = locker.Id;
-            var smallCompartment = locker.Compartments.First(c => c.Size == CompartmentSize.S);
-            smallCompartment.Status = CompartmentStatus.Occupied;
+
+            // Book out every Small, leaving Medium free.
+            foreach (var small in locker.Compartments.Where(c => c.Size == CompartmentSize.S))
+            {
+                db.Reservations.Add(BuildActiveReservation(small.Id));
+            }
+
             await db.SaveChangesAsync();
         }
 
-        var availableSmallResponse = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?size=S&availability=true");
-        var availableMediumResponse = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?size=M&availability=true");
+        var availableSmall = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?size=S&availability=true");
+        var availableMedium = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?size=M&availability=true");
 
-        availableSmallResponse.Should().NotContain(l => l.Id == lockerId);
-        availableMediumResponse.Should().Contain(l => l.Id == lockerId);
+        availableSmall.Should().NotContain(l => l.Id == lockerId);
+        availableMedium.Should().Contain(l => l.Id == lockerId);
     }
 
     [Fact]
-    public async Task GetLockerById_WhenLockerExists_ReturnsDetailWithCompartments()
+    public async Task GetLockers_WhenEveryCompartmentIsBooked_ReportsFullyBookedButStillOpen()
+    {
+        Guid lockerId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<LockGoDbContext>();
+            var locker = await db.Lockers
+                .Include(l => l.Compartments)
+                .FirstAsync(l => l.OperatingStatus == OperatingStatus.Open);
+            lockerId = locker.Id;
+
+            foreach (var compartment in locker.Compartments)
+            {
+                db.Reservations.Add(BuildActiveReservation(compartment.Id));
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        var lockers = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers");
+        var fullyBooked = lockers!.Single(l => l.Id == lockerId);
+
+        fullyBooked.IsFullyBooked.Should().BeTrue();
+        fullyBooked.AvailableCompartmentCount.Should().Be(0);
+        // Fully booked is NOT the same as the site being closed.
+        fullyBooked.OperatingStatus.Should().Be(nameof(OperatingStatus.Open));
+        fullyBooked.SizeAvailability.Should().OnlyContain(s => s.AvailableCount == 0);
+    }
+
+    [Fact]
+    public async Task GetLockerById_WhenLockerExists_ReturnsPerSizeAvailability()
     {
         var lockers = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers");
         var lockerId = lockers!.First().Id;
@@ -86,7 +141,8 @@ public class LockersApiTests : IClassFixture<LockGoWebApplicationFactory>, IAsyn
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var detail = await response.Content.ReadFromJsonAsync<LockerDetailDto>();
         detail!.Id.Should().Be(lockerId);
-        detail.Compartments.Should().NotBeEmpty();
+        detail.SizeAvailability.Should().NotBeEmpty();
+        detail.SizeAvailability.Should().OnlyContain(s => s.TotalCount > 0);
     }
 
     [Fact]
@@ -98,6 +154,19 @@ public class LockersApiTests : IClassFixture<LockGoWebApplicationFactory>, IAsyn
         var body = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
         body!.Error.Code.Should().Be("LOCKER_NOT_FOUND");
     }
+
+    private static Domain.Entities.Reservation BuildActiveReservation(Guid compartmentId) => new()
+    {
+        Id = Guid.NewGuid(),
+        BookingNumber = $"LG-TEST-{Guid.NewGuid():N}"[..20],
+        UserId = Application.Common.MockUser.Id,
+        CompartmentId = compartmentId,
+        StartTime = DateTimeOffset.UtcNow.AddMinutes(-5),
+        EndTime = DateTimeOffset.UtcNow.AddHours(4),
+        Status = ReservationStatus.Active,
+        IdempotencyKey = Guid.NewGuid().ToString(),
+        CreatedAt = DateTimeOffset.UtcNow,
+    };
 
     private record ErrorEnvelope(ErrorDetail Error);
     private record ErrorDetail(string Code, string Message);

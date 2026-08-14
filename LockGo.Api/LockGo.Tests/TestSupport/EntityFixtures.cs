@@ -24,4 +24,8 @@ public static class EntityFixtures
         Price = price,
         Status = CompartmentStatus.Available,
     };
+
+    /// <summary>Several compartments of one size in the same locker — the case that makes "Small: 2 left" meaningful.</summary>
+    public static List<Compartment> AvailableCompartments(Locker locker, CompartmentSize size, int count, decimal price = 35m) =>
+        Enumerable.Range(0, count).Select(_ => AvailableCompartment(locker, size, price)).ToList();
 }

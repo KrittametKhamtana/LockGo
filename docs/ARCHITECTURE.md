@@ -49,30 +49,57 @@ about ASP.NET Core.
 This split is what makes [`LockGo.Tests/Unit/ReservationServiceTests.cs`](../LockGo.Api/LockGo.Tests/Unit/ReservationServiceTests.cs)
 and the concurrency test possible without spinning up a database.
 
+## Booking by size, not by compartment
+
+A locker can hold several compartments of the same size (the seed data
+varies this on purpose — Central Station has 4 Small, Riverside has none).
+The client never sees individual compartment IDs before booking: it picks a
+**locker + size**, and the server assigns whichever compartment of that size
+is actually free, inside the transaction. This is what makes "Small: 2 left"
+in the UI meaningful — two users booking Small concurrently get different
+physical compartments instead of colliding on one hardcoded ID.
+
 ## The concurrency-critical path: `POST /api/reservations`
 
 This is the one part of the system where correctness under concurrent
 requests actually matters — business rule 4: no duplicate reservations from
-a double-clicked Confirm button. The flow,
-all inside one DB transaction (`EfUnitOfWork`):
+a double-clicked Confirm button, *and* no two concurrent requests silently
+claiming the same compartment. The flow, all inside one DB transaction
+(`EfUnitOfWork`), retried up to `MaxClaimAttempts` times:
 
 1. Look up the reservation by `idempotencyKey`. If found, return it —
    this is what makes a resent/duplicated request safe.
-2. Load the compartment (tracked, not `AsNoTracking`) and confirm the locker
-   is open.
-3. Check for an overlapping **active** reservation on that compartment
-   against live `Reservation` rows — never the denormalized
-   `Compartment.Status` column, which is fast-read-only and can be stale.
-4. Insert the reservation, flip `Compartment.Status` to `Occupied`.
+2. Query for one compartment of the requested size with no overlapping
+   **active** reservation — against live `Reservation` rows, never the
+   denormalized `Compartment.Status` column, which exists purely to make
+   list/filter reads cheap and is never trusted on the write path. `None
+   found` splits into two different responses: 404 if the locker doesn't
+   offer that size at all, 409 if it does but every one is taken.
+3. Confirm the locker is open.
+4. Insert the reservation, flip that compartment's `Status` to `Occupied`.
 5. `SaveChanges` — Postgres enforces two independent safety nets here:
    - a **unique index on `idempotency_key`** catches two requests racing
      past step 1 with the same key (a genuine double-click, not just a
      slow first check) — `EfUnitOfWork` translates that constraint
-     violation back into "return the other request's reservation."
+     violation into "return the other request's reservation," and
+     `ReservationService` re-reads and returns it.
    - **`xmin`-based optimistic concurrency** on `Compartment` catches two
-     *different* requests racing for the *same compartment/time* — the
-     loser's `UPDATE` affects 0 rows, EF raises
-     `DbUpdateConcurrencyException`, which `EfUnitOfWork` maps to a 409.
+     *different* requests racing for the *same compartment* — the loser's
+     `UPDATE` affects 0 rows, EF raises `DbUpdateConcurrencyException`,
+     which `EfUnitOfWork` maps to `CompartmentClaimConflictException`.
+
+That last one is deliberately **not** an immediate 409: when several
+compartments of a size exist, two concurrent requests both querying step 2
+before either commits will both pick the *same* first-free compartment (a
+`NOT EXISTS` subquery under `READ COMMITTED` doesn't see the other's
+uncommitted claim). One wins the xmin race; the loser doesn't mean the
+locker is full — a sibling compartment may still be free. `ReservationService`
+catches `CompartmentClaimConflictException` specifically and retries the
+whole attempt (fresh transaction, fresh query) rather than surfacing a false
+"no availability." Only exhausting the retry budget produces a real 409 —
+see `LockGo.Tests/Concurrency/DoubleClickConfirmTests.cs`'s
+`ConcurrentDistinctRequests...` test, which books 3 compartments with 5
+concurrent callers and asserts exactly 3 succeed.
 
 Why optimistic (`xmin`) instead of a pessimistic row lock (`SELECT ... FOR
 UPDATE`)? The spec calls for it explicitly given the free-tier server's
@@ -85,11 +112,17 @@ design surfaced (and fixed) during test-writing.
 
 ## Availability model
 
-`Compartment.Status` (`Available`/`Occupied`) is denormalized specifically
-so `GET /api/lockers` and `GET /api/lockers/{id}` can list/filter without
-joining or aggregating `Reservation` rows on every request — it's a plain
-indexed column. It is **not** consulted on the write path (see step 3
-above); it exists purely to make reads cheap on a low-spec database.
+Availability is always derived from live `Reservation` rows — both the
+booking write path (above) and `LockerService`'s per-size rollup
+(`SizeAvailability`, grouped by `Compartment.Size`) count a compartment as
+free only when it has no active, unexpired reservation. `Compartment.Status`
+still exists as a denormalized flag, updated alongside each booking, but
+nothing reads it to answer "is this available" — the source of truth is
+one definition, not two that could drift apart.
+
+A locker's `IsFullyBooked` flag (Open, but zero compartments free right
+now) is likewise derived at request time, not stored — there's no state to
+keep in sync when a reservation is made or expires.
 
 Expiry is lazy: a reservation's `Status` is only ever `Active`, `Completed`,
 or `Cancelled` — there's no `Expired` state to keep in sync. Whether a
@@ -107,14 +140,14 @@ resource-constrained box.
 ```
 src/
  ├─ pages/        FindLockerPage, LockerDetailPage, ReservationPage, ConfirmationPage
- ├─ components/   LockerCard, FilterBar, CompartmentSelector, SummaryCard, Layout
+ ├─ components/   LockerCard, FilterBar, CompartmentSelector, SizeAvailabilityChips, SummaryCard, Layout
  ├─ hooks/        useLockers/useLocker, useCreateReservation/useReservationQuery (React Query)
  ├─ api/          axios client + typed endpoint functions
  ├─ types/        TS types mirroring the backend DTOs
  └─ theme/        MUI theme
 ```
 
-Locker → compartment selection is passed between `LockerDetailPage` and
+Locker + chosen size is passed between `LockerDetailPage` and
 `ReservationPage` via router state (no extra round-trip — the data's
 already in hand from the detail page fetch). `ConfirmationPage` fetches by
 reservation ID instead, so the confirmation URL is shareable/refreshable on

@@ -3,7 +3,8 @@ import type { CompartmentSize } from "./locker";
 export type ReservationStatus = "Active" | "Completed" | "Cancelled";
 
 export interface CreateReservationRequest {
-  compartmentId: string;
+  lockerId: string;
+  size: CompartmentSize;
   durationHours: number;
   idempotencyKey: string;
 }

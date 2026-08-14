@@ -1,12 +1,11 @@
 export type CompartmentSize = "S" | "M" | "L";
-export type CompartmentStatus = "Available" | "Occupied";
 export type OperatingStatus = "Open" | "Closed";
 
-export interface Compartment {
-  id: string;
+export interface CompartmentSizeAvailability {
   size: CompartmentSize;
   price: number;
-  status: CompartmentStatus;
+  availableCount: number;
+  totalCount: number;
 }
 
 export interface LockerListItem {
@@ -19,6 +18,8 @@ export interface LockerListItem {
   distanceKm: number | null;
   minPrice: number;
   availableCompartmentCount: number;
+  sizeAvailability: CompartmentSizeAvailability[];
+  isFullyBooked: boolean;
 }
 
 export interface LockerDetail {
@@ -28,7 +29,8 @@ export interface LockerDetail {
   lat: number;
   lng: number;
   operatingStatus: OperatingStatus;
-  compartments: Compartment[];
+  sizeAvailability: CompartmentSizeAvailability[];
+  isFullyBooked: boolean;
 }
 
 export interface LockerSearchParams {
@@ -36,4 +38,14 @@ export interface LockerSearchParams {
   distance?: number;
   size?: CompartmentSize;
   availability?: boolean;
+  search?: string;
 }
+
+export const SIZE_LABEL: Record<CompartmentSize, string> = {
+  S: "Small",
+  M: "Medium",
+  L: "Large",
+};
+
+/** Fixed order so the S/M/L breakdown reads consistently everywhere. */
+export const SIZE_ORDER: CompartmentSize[] = ["S", "M", "L"];

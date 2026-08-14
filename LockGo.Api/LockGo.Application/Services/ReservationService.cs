@@ -12,6 +12,14 @@ public class ReservationService : IReservationService
     private const int MinDurationHours = 1;
     private const int MaxDurationHours = 72;
 
+    /// <summary>
+    /// How many times to re-pick a compartment after losing an optimistic-concurrency
+    /// race. Each retry starts a fresh transaction and re-queries availability, so the
+    /// only cost of exhausting these is falling back to a NO_AVAILABILITY conflict —
+    /// which, under heavy contention on the last few compartments, is the honest answer.
+    /// </summary>
+    private const int MaxClaimAttempts = 5;
+
     private readonly IReservationRepository _reservationRepository;
     private readonly ICompartmentRepository _compartmentRepository;
     private readonly IUnitOfWork _unitOfWork;
@@ -38,24 +46,52 @@ public class ReservationService : IReservationService
             throw new ValidationAppException("IdempotencyKey is required.");
         }
 
-        try
+        if (!Enum.TryParse<CompartmentSize>(request.Size, ignoreCase: true, out var size))
         {
-            return await _unitOfWork.ExecuteInTransactionAsync(ct2 => CreateInTransactionAsync(request, ct2), ct);
+            throw new ValidationAppException($"Size must be one of: {string.Join(", ", Enum.GetNames<CompartmentSize>())}.");
         }
-        catch (IdempotencyKeyConflictException)
+
+        // Concurrent requests for the same size all pick the same first-free
+        // compartment, so all but one lose the xmin race even when siblings are
+        // still free. Retrying re-queries for the next free compartment instead
+        // of reporting a false "no availability". Bounded so a genuinely full
+        // locker still fails fast; MaxClaimAttempts covers realistic contention
+        // without letting a request spin.
+        for (var attempt = 1; ; attempt++)
         {
-            // Two requests raced past the check-then-insert window (rapid double-click
-            // hitting different app instances); the unique constraint caught the second
-            // insert. Re-read and return the winning reservation — still idempotent from
-            // the caller's point of view.
-            var existing = await _reservationRepository.GetByIdempotencyKeyAsync(request.IdempotencyKey, ct)
-                ?? throw new InvalidOperationException(
-                    "Idempotency key conflict reported but no matching reservation was found.");
-            return MapToDto(existing);
+            try
+            {
+                return await _unitOfWork.ExecuteInTransactionAsync(ct2 => CreateInTransactionAsync(request, size, ct2), ct);
+            }
+            catch (IdempotencyKeyConflictException)
+            {
+                // Two requests raced past the check-then-insert window (rapid double-click
+                // hitting different app instances); the unique constraint caught the second
+                // insert. Re-read and return the winning reservation — still idempotent from
+                // the caller's point of view.
+                var existing = await _reservationRepository.GetByIdempotencyKeyAsync(request.IdempotencyKey, ct)
+                    ?? throw new InvalidOperationException(
+                        "Idempotency key conflict reported but no matching reservation was found.");
+                return MapToDto(existing);
+            }
+            catch (CompartmentClaimConflictException) when (attempt < MaxClaimAttempts)
+            {
+                // Lost the race for one specific compartment — loop and try the next.
+            }
+            catch (CompartmentClaimConflictException)
+            {
+                // Out of retries: sustained contention on the remaining compartments.
+                // Report it as a normal availability conflict rather than leaking an
+                // internal signal (which the handler would turn into a bare 500).
+                throw new ConflictException("NO_AVAILABILITY", $"No {size} compartment is available at this locker right now.");
+            }
         }
     }
 
-    private async Task<ReservationDto> CreateInTransactionAsync(CreateReservationRequest request, CancellationToken ct)
+    private async Task<ReservationDto> CreateInTransactionAsync(
+        CreateReservationRequest request,
+        CompartmentSize size,
+        CancellationToken ct)
     {
         var existing = await _reservationRepository.GetByIdempotencyKeyAsync(request.IdempotencyKey, ct);
         if (existing is not null)
@@ -63,33 +99,39 @@ public class ReservationService : IReservationService
             return MapToDto(existing);
         }
 
-        var compartment = await _compartmentRepository.GetByIdWithLockerAsync(request.CompartmentId, ct)
-            ?? throw new NotFoundException("COMPARTMENT_NOT_FOUND", $"Compartment '{request.CompartmentId}' was not found.");
-
-        if (compartment.Locker.OperatingStatus != OperatingStatus.Open)
-        {
-            throw new ConflictException("LOCKER_CLOSED", "This locker is currently closed.");
-        }
-
         var startTime = DateTimeOffset.UtcNow;
         var endTime = startTime.AddHours(request.DurationHours);
 
-        // Authoritative check — never trust the denormalized Compartment.Status here.
-        var hasOverlap = await _reservationRepository.HasOverlapAsync(compartment.Id, startTime, endTime, ct);
-        if (hasOverlap)
+        // Picks a compartment of the requested size with no overlapping active
+        // reservation — checked against live Reservation rows, never the
+        // denormalized Status column. Returning null means every compartment of
+        // that size is taken for this window.
+        var compartment = await _compartmentRepository.FindAvailableAsync(request.LockerId, size, startTime, endTime, ct);
+
+        if (compartment is null)
         {
-            // Race window: under READ COMMITTED, a concurrent request sharing this
-            // exact IdempotencyKey can commit its reservation in the gap between our
-            // idempotency check above and this overlap check — we'd then "overlap"
-            // with our own replay rather than a competing booking. Re-check before
-            // concluding this is a real conflict.
+            // Race note: a concurrent request holding the same idempotency key may
+            // have taken the last compartment between our check above and here.
+            // Re-check before reporting a conflict, so a double-click gets its own
+            // booking back rather than a misleading "no availability".
             var wonByReplay = await _reservationRepository.GetByIdempotencyKeyAsync(request.IdempotencyKey, ct);
             if (wonByReplay is not null)
             {
                 return MapToDto(wonByReplay);
             }
 
-            throw new ConflictException("NO_AVAILABILITY", "This compartment is not available for the selected time.");
+            // Distinguish "fully booked" (409) from "this locker doesn't offer
+            // that size at all" (404) — very different messages for the client.
+            var sizeExists = await _compartmentRepository.ExistsForSizeAsync(request.LockerId, size, ct);
+
+            throw sizeExists
+                ? new ConflictException("NO_AVAILABILITY", $"No {size} compartment is available at this locker right now.")
+                : new NotFoundException("COMPARTMENT_NOT_FOUND", $"Locker '{request.LockerId}' has no {size} compartment.");
+        }
+
+        if (compartment.Locker.OperatingStatus != OperatingStatus.Open)
+        {
+            throw new ConflictException("LOCKER_CLOSED", "This locker is currently closed.");
         }
 
         var reservation = new Reservation

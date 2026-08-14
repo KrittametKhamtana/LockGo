@@ -1,17 +1,43 @@
 using LockGo.Application.Interfaces;
 using LockGo.Domain.Entities;
+using LockGo.Domain.Enums;
 
 namespace LockGo.Tests.Concurrency;
 
+/// <summary>
+/// Backs a fixed pool of compartments for one locker+size. Hands out the first
+/// one not already claimed by an active reservation in the shared
+/// RacyReservationRepository, mirroring what the real SQL
+/// "no overlapping active reservation" predicate does — so the concurrency
+/// tests exercise a real "last compartment wins" race, not a stub that always
+/// returns the same instance.
+/// </summary>
 public class StubCompartmentRepository : ICompartmentRepository
 {
-    private readonly Compartment _compartment;
+    private readonly IReadOnlyList<Compartment> _compartments;
+    private readonly RacyReservationRepository _reservations;
 
-    public StubCompartmentRepository(Compartment compartment)
+    public StubCompartmentRepository(RacyReservationRepository reservations, params Compartment[] compartments)
     {
-        _compartment = compartment;
+        _reservations = reservations;
+        _compartments = compartments;
     }
 
-    public Task<Compartment?> GetByIdWithLockerAsync(Guid id, CancellationToken ct)
-        => Task.FromResult(id == _compartment.Id ? _compartment : null);
+    public Task<Compartment?> FindAvailableAsync(
+        Guid lockerId,
+        CompartmentSize size,
+        DateTimeOffset start,
+        DateTimeOffset end,
+        CancellationToken ct)
+    {
+        var match = _compartments.FirstOrDefault(c =>
+            c.LockerId == lockerId &&
+            c.Size == size &&
+            !_reservations.HasOverlap(c.Id, start, end));
+
+        return Task.FromResult(match);
+    }
+
+    public Task<bool> ExistsForSizeAsync(Guid lockerId, CompartmentSize size, CancellationToken ct)
+        => Task.FromResult(_compartments.Any(c => c.LockerId == lockerId && c.Size == size));
 }

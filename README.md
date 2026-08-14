@@ -125,12 +125,13 @@ cd LockGo.Api
 dotnet test
 ```
 
-22 tests: unit tests for `ReservationService`'s and `LockerService`'s
+32 tests: unit tests for `ReservationService`'s and `LockerService`'s
 business rules (reserve success / no-availability / double-booking
-prevention / idempotent replay / size-filtered pricing), a dedicated
-concurrency suite proving a double-clicked Confirm button can't create two
-reservations (see `docs/DEBUGGING.md`), and HTTP-level integration tests
-via `WebApplicationFactory`.
+prevention / idempotent replay / per-size availability), a concurrency suite
+proving a double-clicked Confirm button can't create two reservations *and*
+that concurrent requests for the same size correctly consume separate
+compartments rather than colliding (see `docs/DEBUGGING.md`), and
+HTTP-level integration tests via `WebApplicationFactory`.
 
 Frontend:
 

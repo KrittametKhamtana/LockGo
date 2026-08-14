@@ -1,54 +1,57 @@
 import { Card, CardActionArea, CardContent, Chip, Stack, Typography } from "@mui/material";
-import type { Compartment } from "../types/locker";
-
-const SIZE_LABEL: Record<Compartment["size"], string> = {
-  S: "Small",
-  M: "Medium",
-  L: "Large",
-};
+import { SIZE_LABEL, type CompartmentSize, type CompartmentSizeAvailability } from "../types/locker";
 
 interface CompartmentSelectorProps {
-  compartments: Compartment[];
-  selectedId: string | null;
-  onSelect: (compartment: Compartment) => void;
+  sizeAvailability: CompartmentSizeAvailability[];
+  selectedSize: CompartmentSize | null;
+  onSelect: (entry: CompartmentSizeAvailability) => void;
+  /** Blocks selection entirely (e.g. the locker itself is closed). */
+  disabled?: boolean;
 }
 
-export function CompartmentSelector({ compartments, selectedId, onSelect }: CompartmentSelectorProps) {
+export function CompartmentSelector({
+  sizeAvailability,
+  selectedSize,
+  onSelect,
+  disabled = false,
+}: CompartmentSelectorProps) {
   return (
     <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-      {compartments.map((compartment) => {
-        const isAvailable = compartment.status === "Available";
-        const isSelected = compartment.id === selectedId;
+      {sizeAvailability.map((entry) => {
+        // A size can only be booked while at least one of its compartments is
+        // free — the count, not a per-compartment status, is what gates this.
+        const selectable = !disabled && entry.availableCount > 0;
+        const isSelected = entry.size === selectedSize;
 
         return (
           <Card
-            key={compartment.id}
+            key={entry.size}
             variant="outlined"
             sx={{
               flex: 1,
               borderColor: isSelected ? "primary.main" : undefined,
               borderWidth: isSelected ? 2 : 1,
-              opacity: isAvailable ? 1 : 0.5,
+              opacity: selectable ? 1 : 0.55,
             }}
           >
-            <CardActionArea
-              disabled={!isAvailable}
-              onClick={() => onSelect(compartment)}
-              sx={{ p: 1 }}
-            >
+            <CardActionArea disabled={!selectable} onClick={() => onSelect(entry)} sx={{ p: 1 }}>
               <CardContent>
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
                   <Typography variant="subtitle1" fontWeight={700}>
-                    {SIZE_LABEL[compartment.size]}
+                    {SIZE_LABEL[entry.size]}
                   </Typography>
                   <Chip
                     size="small"
-                    label={isAvailable ? "Available" : "Occupied"}
-                    color={isAvailable ? "success" : "default"}
+                    label={entry.availableCount > 0 ? `${entry.availableCount} left` : "Full"}
+                    color={entry.availableCount > 0 ? "success" : "default"}
                   />
                 </Stack>
+
                 <Typography variant="h6" sx={{ mt: 1 }}>
-                  ฿{compartment.price.toFixed(0)}
+                  ฿{entry.price.toFixed(0)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {entry.availableCount} of {entry.totalCount} free
                 </Typography>
               </CardContent>
             </CardActionArea>

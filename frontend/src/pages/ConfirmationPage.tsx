@@ -3,6 +3,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { useNavigate, useParams } from "react-router-dom";
 import { SummaryCard } from "../components/SummaryCard";
 import { useReservationQuery } from "../hooks/useReservation";
+import { SIZE_LABEL } from "../types/locker";
 
 const STATUS_COLOR: Record<string, "success" | "default" | "error"> = {
   Active: "success",
@@ -50,7 +51,7 @@ export function ConfirmationPage() {
         title={reservation.bookingNumber}
         subtitle={`${reservation.lockerName} · ${reservation.lockerAddress}`}
         rows={[
-          { label: "Compartment", value: reservation.compartmentSize },
+          { label: "Compartment", value: SIZE_LABEL[reservation.compartmentSize] },
           { label: "Price", value: `฿${reservation.price.toFixed(0)}` },
           { label: "Start time", value: formatDateTime(reservation.startTime) },
           { label: "Expires", value: formatDateTime(reservation.endTime) },

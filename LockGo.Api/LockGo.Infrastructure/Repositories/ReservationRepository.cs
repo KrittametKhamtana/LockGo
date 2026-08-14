@@ -1,6 +1,5 @@
 using LockGo.Application.Interfaces;
 using LockGo.Domain.Entities;
-using LockGo.Domain.Enums;
 using LockGo.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,20 +27,6 @@ public class ReservationRepository : IReservationRepository
             .AsNoTracking()
             .Include(r => r.Compartment).ThenInclude(c => c.Locker)
             .FirstOrDefaultAsync(r => r.Id == id, ct);
-    }
-
-    public async Task<bool> HasOverlapAsync(Guid compartmentId, DateTimeOffset start, DateTimeOffset end, CancellationToken ct)
-    {
-        // Status == Active alone isn't enough — a reservation whose EndTime has
-        // already passed is still stored as Active (no expiry cron job), but
-        // start is always "now" for new bookings, so EndTime > start already
-        // excludes anything that's effectively expired.
-        return await _db.Reservations.AnyAsync(
-            r => r.CompartmentId == compartmentId &&
-                 r.Status == ReservationStatus.Active &&
-                 r.StartTime < end &&
-                 r.EndTime > start,
-            ct);
     }
 
     public void Add(Reservation reservation)

@@ -3,12 +3,13 @@ import { Alert, Button, Stack, ToggleButton, ToggleButtonGroup, Typography } fro
 import { useLocation, useNavigate } from "react-router-dom";
 import { SummaryCard } from "../components/SummaryCard";
 import { useCreateReservation } from "../hooks/useReservation";
-import type { Compartment, LockerDetail } from "../types/locker";
+import { SIZE_LABEL, type CompartmentSize, type LockerDetail } from "../types/locker";
 import { ApiError } from "../api/client";
 
 interface ReservationRouteState {
   locker: LockerDetail;
-  compartment: Compartment;
+  size: CompartmentSize;
+  price: number;
 }
 
 const DURATION_OPTIONS = [
@@ -47,7 +48,7 @@ export function ReservationPage() {
     );
   }
 
-  const { locker, compartment } = routeState;
+  const { locker, size, price } = routeState;
 
   function handleConfirm() {
     if (submittingRef.current) {
@@ -56,7 +57,7 @@ export function ReservationPage() {
     submittingRef.current = true;
 
     mutation.mutate(
-      { compartmentId: compartment.id, durationHours, idempotencyKey },
+      { lockerId: locker.id, size, durationHours, idempotencyKey },
       {
         onSuccess: (reservation) => {
           navigate(`/reservations/${reservation.id}`, { replace: true });
@@ -106,14 +107,14 @@ export function ReservationPage() {
         title={locker.name}
         subtitle={locker.address}
         rows={[
-          { label: "Compartment size", value: compartment.size },
+          { label: "Compartment size", value: SIZE_LABEL[size] },
           { label: "Duration", value: DURATION_OPTIONS.find((o) => o.hours === durationHours)?.label },
         ]}
         footer={
           <Stack direction="row" justifyContent="space-between" alignItems="center">
             <Typography variant="subtitle1">Total</Typography>
             <Typography variant="h5" fontWeight={700}>
-              ฿{compartment.price.toFixed(0)}
+              ฿{price.toFixed(0)}
             </Typography>
           </Stack>
         }
@@ -121,12 +122,7 @@ export function ReservationPage() {
 
       {mutation.isError && <Alert severity="error">{errorMessage}</Alert>}
 
-      <Button
-        variant="contained"
-        size="large"
-        onClick={handleConfirm}
-        disabled={mutation.isPending}
-      >
+      <Button variant="contained" size="large" onClick={handleConfirm} disabled={mutation.isPending}>
         {mutation.isPending ? "Confirming…" : "Confirm reservation"}
       </Button>
     </Stack>

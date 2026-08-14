@@ -7,4 +7,10 @@ public record LockerDetailDto(
     double Lat,
     double Lng,
     string OperatingStatus,
-    IReadOnlyList<CompartmentDto> Compartments);
+    /// <summary>
+    /// Grouped by size rather than a flat compartment list — the booking flow
+    /// picks a size and the server assigns a free compartment, so exposing
+    /// individual compartment IDs to the client would be misleading.
+    /// </summary>
+    IReadOnlyList<CompartmentSizeAvailabilityDto> SizeAvailability,
+    bool IsFullyBooked);

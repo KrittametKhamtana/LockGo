@@ -20,6 +20,7 @@ public class LockersController : ControllerBase
     /// distance: max distance in km, only applied when location is supplied.
     /// size: S | M | L.
     /// availability: true to only return lockers with at least one available compartment.
+    /// search: free-text match on locker name or address.
     /// </summary>
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<LockerListItemDto>>(StatusCodes.Status200OK)]
@@ -28,6 +29,7 @@ public class LockersController : ControllerBase
         [FromQuery] double? distance,
         [FromQuery] string? size,
         [FromQuery] bool? availability,
+        [FromQuery] string? search,
         CancellationToken ct)
     {
         (double lat, double lng)? origin = TryParseLocation(location);
@@ -37,7 +39,8 @@ public class LockersController : ControllerBase
             origin?.lng,
             distance,
             size,
-            availability);
+            availability,
+            search);
 
         var result = await _lockerService.SearchAsync(query, ct);
         return Ok(result);

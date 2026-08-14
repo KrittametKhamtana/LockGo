@@ -1,17 +1,32 @@
 import { Box, Card, CardActionArea, CardContent, Chip, Stack, Typography } from "@mui/material";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
-import LockIcon from "@mui/icons-material/Lock";
 import { useNavigate } from "react-router-dom";
+import { SizeAvailabilityChips } from "./SizeAvailabilityChips";
 import type { LockerListItem } from "../types/locker";
 
 interface LockerCardProps {
   locker: LockerListItem;
 }
 
+/**
+ * Operating status and availability are separate concerns: "Closed" means the
+ * site isn't operating at all, while "No availability" means it's open but
+ * every compartment is taken. Only one badge is shown, with Closed winning —
+ * if the site is shut, its availability isn't the useful information.
+ */
+function statusChip(locker: LockerListItem) {
+  if (locker.operatingStatus === "Closed") {
+    return { label: "Closed", color: "default" as const, variant: "outlined" as const };
+  }
+  if (locker.isFullyBooked) {
+    return { label: "No availability", color: "warning" as const, variant: "filled" as const };
+  }
+  return { label: "Open", color: "success" as const, variant: "filled" as const };
+}
+
 export function LockerCard({ locker }: LockerCardProps) {
   const navigate = useNavigate();
-  const isOpen = locker.operatingStatus === "Open";
-  const hasAvailability = locker.availableCompartmentCount > 0;
+  const status = statusChip(locker);
 
   return (
     <Card variant="outlined">
@@ -25,21 +40,19 @@ export function LockerCard({ locker }: LockerCardProps) {
                 <Typography variant="body2">{locker.address}</Typography>
               </Stack>
             </Box>
-            <Chip
-              size="small"
-              label={isOpen ? "Open" : "Closed"}
-              color={isOpen ? "success" : "default"}
-              variant={isOpen ? "filled" : "outlined"}
-            />
+            <Chip size="small" label={status.label} color={status.color} variant={status.variant} />
           </Stack>
 
+          <Box sx={{ mt: 2 }}>
+            <SizeAvailabilityChips sizeAvailability={locker.sizeAvailability} showMissingSizes />
+          </Box>
+
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 2 }}>
-            <Stack direction="row" alignItems="center" gap={0.5}>
-              <LockIcon fontSize="small" color={hasAvailability ? "success" : "disabled"} />
-              <Typography variant="body2" color={hasAvailability ? "success.main" : "text.disabled"}>
-                {hasAvailability ? `${locker.availableCompartmentCount} available` : "No availability"}
-              </Typography>
-            </Stack>
+            <Typography variant="body2" color={locker.isFullyBooked ? "text.disabled" : "success.main"}>
+              {locker.isFullyBooked
+                ? "Fully booked"
+                : `${locker.availableCompartmentCount} compartment${locker.availableCompartmentCount === 1 ? "" : "s"} available`}
+            </Typography>
 
             <Stack direction="row" alignItems="center" gap={2}>
               {locker.distanceKm !== null && (

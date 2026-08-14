@@ -8,6 +8,7 @@ export async function searchLockers(params: LockerSearchParams): Promise<LockerL
       distance: params.distance,
       size: params.size,
       availability: params.availability,
+      search: params.search || undefined,
     },
   });
   return data;

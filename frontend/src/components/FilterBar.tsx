@@ -2,6 +2,7 @@ import {
   Button,
   Checkbox,
   FormControlLabel,
+  InputAdornment,
   MenuItem,
   Paper,
   Slider,
@@ -10,9 +11,12 @@ import {
   Typography,
 } from "@mui/material";
 import MyLocationIcon from "@mui/icons-material/MyLocation";
-import type { CompartmentSize } from "../types/locker";
+import LocationOffIcon from "@mui/icons-material/LocationOff";
+import SearchIcon from "@mui/icons-material/Search";
+import { SIZE_LABEL, SIZE_ORDER, type CompartmentSize } from "../types/locker";
 
 export interface Filters {
+  search: string;
   location: string;
   distanceKm: number;
   size: CompartmentSize | "";
@@ -22,38 +26,57 @@ export interface Filters {
 interface FilterBarProps {
   filters: Filters;
   onChange: (patch: Partial<Filters>) => void;
-  onUseMyLocation: () => void;
+  onToggleLocation: () => void;
   locating: boolean;
 }
 
-const SIZE_OPTIONS: { value: CompartmentSize | ""; label: string }[] = [
-  { value: "", label: "Any size" },
-  { value: "S", label: "Small" },
-  { value: "M", label: "Medium" },
-  { value: "L", label: "Large" },
-];
-
-export function FilterBar({ filters, onChange, onUseMyLocation, locating }: FilterBarProps) {
-  const hasLocation = filters.location.length > 0;
+export function FilterBar({ filters, onChange, onToggleLocation, locating }: FilterBarProps) {
+  const usingLocation = filters.location.length > 0;
 
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Stack spacing={2}>
+        <TextField
+          fullWidth
+          size="small"
+          label="Search by name or address"
+          placeholder="e.g. Silom, Riverside, Airport"
+          value={filters.search}
+          onChange={(e) => onChange({ search: e.target.value })}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+
         <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }}>
           <Button
-            variant="outlined"
-            startIcon={<MyLocationIcon />}
-            onClick={onUseMyLocation}
+            variant={usingLocation ? "contained" : "outlined"}
+            startIcon={usingLocation ? <LocationOffIcon /> : <MyLocationIcon />}
+            onClick={onToggleLocation}
             loading={locating}
             sx={{ whiteSpace: "nowrap" }}
           >
-            {hasLocation ? "Location set" : "Use my location"}
+            {usingLocation ? "Using my location" : "Use my location"}
           </Button>
 
-          <TextField select label="Compartment size" size="small" value={filters.size} onChange={(e) => onChange({ size: e.target.value as CompartmentSize | "" })} sx={{ minWidth: 160 }}>
-            {SIZE_OPTIONS.map((option) => (
-              <MenuItem key={option.value} value={option.value}>
-                {option.label}
+          <TextField
+            select
+            label="Compartment size"
+            size="small"
+            value={filters.size}
+            onChange={(e) => onChange({ size: e.target.value as CompartmentSize | "" })}
+            sx={{ minWidth: 160 }}
+          >
+            <MenuItem value="">Any size</MenuItem>
+            {SIZE_ORDER.map((size) => (
+              <MenuItem key={size} value={size}>
+                {SIZE_LABEL[size]}
               </MenuItem>
             ))}
           </TextField>
@@ -69,7 +92,7 @@ export function FilterBar({ filters, onChange, onUseMyLocation, locating }: Filt
           />
         </Stack>
 
-        {hasLocation && (
+        {usingLocation && (
           <Stack direction="row" spacing={2} alignItems="center">
             <Typography variant="body2" sx={{ whiteSpace: "nowrap" }} color="text.secondary">
               Within {filters.distanceKm} km

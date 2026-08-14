@@ -3,8 +3,10 @@ import { Alert, CircularProgress, Stack, Typography } from "@mui/material";
 import { FilterBar, type Filters } from "../components/FilterBar";
 import { LockerCard } from "../components/LockerCard";
 import { useLockers } from "../hooks/useLockers";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
 const DEFAULT_FILTERS: Filters = {
+  search: "",
   location: "",
   distanceKm: 10,
   size: "",
@@ -16,14 +18,26 @@ export function FindLockerPage() {
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
+  // Avoids a request per keystroke while typing in the search box.
+  const debouncedSearch = useDebouncedValue(filters.search, 300);
+
   const { data: lockers, isLoading, isError } = useLockers({
+    search: debouncedSearch,
     location: filters.location,
     distance: filters.location ? filters.distanceKm : undefined,
     size: filters.size || undefined,
     availability: filters.availableOnly || undefined,
   });
 
-  function handleUseMyLocation() {
+  function handleToggleLocation() {
+    // Toggling off just clears the coordinates — distance filtering and sorting
+    // are both driven by their presence, so the list falls back to unsorted.
+    if (filters.location) {
+      setFilters((prev) => ({ ...prev, location: "" }));
+      setLocationError(null);
+      return;
+    }
+
     if (!navigator.geolocation) {
       setLocationError("Your browser doesn't support geolocation.");
       return;
@@ -59,7 +73,7 @@ export function FindLockerPage() {
       <FilterBar
         filters={filters}
         onChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
-        onUseMyLocation={handleUseMyLocation}
+        onToggleLocation={handleToggleLocation}
         locating={locating}
       />
 
