@@ -4,6 +4,9 @@ LockGo.Api/**/obj/
 *.user
 .vs/
 
+# Contains real DB credentials once filled in locally — never commit this.
+LockGo.Api/LockGo.Api/appsettings.Development.json
+
 # Node / frontend
 frontend/node_modules/
 frontend/dist/

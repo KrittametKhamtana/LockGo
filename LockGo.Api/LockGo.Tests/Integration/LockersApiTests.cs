@@ -2,6 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
 using LockGo.Application.DTOs;
+using LockGo.Domain.Enums;
+using LockGo.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace LockGo.Tests.Integration;
 
@@ -43,6 +47,32 @@ public class LockersApiTests : IClassFixture<LockGoWebApplicationFactory>, IAsyn
         var lockers = await response.Content.ReadFromJsonAsync<List<LockerListItemDto>>();
         lockers.Should().NotBeNull();
         lockers!.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task GetLockers_FilteredBySizeAndAvailability_ExcludesLockerWhoseOnlyAvailableCompartmentIsADifferentSize()
+    {
+        // A locker with its Small compartment occupied but Medium/Large still
+        // available must NOT show up for "available Small" — size and
+        // availability have to be true of the SAME compartment, not checked
+        // independently (that was the bug: two separate Any() calls let an
+        // available-but-wrong-size compartment satisfy the availability half).
+        Guid lockerId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<LockGoDbContext>();
+            var locker = await db.Lockers.Include(l => l.Compartments).FirstAsync();
+            lockerId = locker.Id;
+            var smallCompartment = locker.Compartments.First(c => c.Size == CompartmentSize.S);
+            smallCompartment.Status = CompartmentStatus.Occupied;
+            await db.SaveChangesAsync();
+        }
+
+        var availableSmallResponse = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?size=S&availability=true");
+        var availableMediumResponse = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?size=M&availability=true");
+
+        availableSmallResponse.Should().NotContain(l => l.Id == lockerId);
+        availableMediumResponse.Should().Contain(l => l.Id == lockerId);
     }
 
     [Fact]

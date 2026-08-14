@@ -20,12 +20,20 @@ public class LockerService : ILockerService
         var lockers = await _lockerRepository.SearchAsync(query, ct);
 
         var hasOrigin = query.Lat.HasValue && query.Lng.HasValue;
+        var hasSizeFilter = Enum.TryParse<CompartmentSize>(query.Size, ignoreCase: true, out var sizeFilter);
 
         var items = lockers.Select(locker =>
         {
             var distanceKm = hasOrigin
                 ? HaversineDistanceKm(query.Lat!.Value, query.Lng!.Value, locker.Lat, locker.Lng)
                 : (double?)null;
+
+            // minPrice/availableCompartmentCount reflect only the requested
+            // size when one was given — otherwise a "Small" search could show
+            // a locker's Large price or count compartments the user didn't ask for.
+            var relevantCompartments = hasSizeFilter
+                ? locker.Compartments.Where(c => c.Size == sizeFilter).ToList()
+                : locker.Compartments;
 
             return new LockerListItemDto(
                 locker.Id,
@@ -35,8 +43,8 @@ public class LockerService : ILockerService
                 locker.Lng,
                 locker.OperatingStatus.ToString(),
                 distanceKm,
-                locker.Compartments.Count > 0 ? locker.Compartments.Min(c => c.Price) : 0m,
-                locker.Compartments.Count(c => c.Status == CompartmentStatus.Available));
+                relevantCompartments.Count > 0 ? relevantCompartments.Min(c => c.Price) : 0m,
+                relevantCompartments.Count(c => c.Status == CompartmentStatus.Available));
         });
 
         if (hasOrigin && query.MaxDistanceKm.HasValue)

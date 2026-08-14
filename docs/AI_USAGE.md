@@ -97,27 +97,69 @@ correctness requirement beyond "returns the right JSON."
 | **Correctness** | Overlap check could return a false conflict for a request racing its own idempotency-key replay (see `docs/DEBUGGING.md`). | Re-check `idempotencyKey` before throwing `NO_AVAILABILITY`; return the winning replay instead. |
 | **Correctness** | `DbUpdateConcurrencyException` (from a genuine two-different-requests race on the same compartment) is a subtype of `DbUpdateException`; if the idempotency-key-unique-violation catch clause were written first without a type-specific guard, it could accidentally swallow a concurrency exception meant for a different code path. | `EfUnitOfWork` catches `DbUpdateConcurrencyException` in its own clause, ordered before the more general `DbUpdateException` filter, so each failure mode maps to the right error code. |
 | **Security** | `BookingNumberGenerator` originally reached for `System.Random`-style generation. Booking numbers are shown to users but aren't used as secrets or lookup keys anywhere sensitive, so predictability isn't a real vulnerability here — but there's no cost to doing it right. | Uses `RandomNumberGenerator.GetInt32` (cryptographically strong) instead of a non-cryptographic PRNG, and excludes visually-ambiguous characters (`0`/`O`, `1`/`I`). |
-| **Performance** | The overlap query filters `CompartmentId + Status + StartTime + EndTime` — without a matching index this is a sequential scan on every booking attempt, which matters on a CPU-limited free-tier server. | Composite index `(compartment_id, status, start_time, end_time)` added in `ReservationConfiguration`; verify via `EXPLAIN ANALYZE` against production data volume once seeded — not done here since no live Postgres instance was available in this environment (see the README's "What wasn't verified" note). |
+| **Performance** | The overlap query filters `CompartmentId + Status + StartTime + EndTime` — without a matching index this is a sequential scan on every booking attempt, which matters on a CPU-limited free-tier server. | Composite index `(compartment_id, status, start_time, end_time)` added in `ReservationConfiguration`. Confirmed against the live Neon instance that queries and reservation writes succeed; `EXPLAIN ANALYZE` against a realistic data volume (this seed data is only a handful of rows) still hasn't been run and is worth doing before real load. |
 | **Maintainability** | `IdempotencyKeyConflictException` is an internal signal (not a subtype of the public `AppException` hierarchy) that should never reach the API layer unhandled. | Documented explicitly in its own doc comment; if it ever *does* leak, the exception handler's fallback (bare `500 INTERNAL_ERROR`, logged) makes that visible rather than silently mismapping it to a wrong HTTP status. |
 | **Maintainability** | `ReservationService` depends on `IUnitOfWork`, `IReservationRepository`, `ICompartmentRepository` — none of which reference EF Core — so the whole class can be unit-tested with hand-written fakes/Moq without a database. Verified this actually holds by writing `ReservationServiceTests.cs` against mocks and confirming zero references to `Microsoft.EntityFrameworkCore` crept into `LockGo.Application.csproj`. | No fix needed — flagged as a thing to *keep* true as the codebase grows, not a defect. |
 
-## 4. What wasn't verified
+## 4. Live Postgres verification — and two real bugs it caught
 
-Being transparent about the boundary of what this session could actually
-check:
+Real credentials for a hosted (Neon) Postgres instance became available
+after the initial build. Running the actual API against it immediately
+surfaced two bugs that every automated test in the suite — including the
+InMemory-backed integration tests — had missed:
 
-- **No live Postgres instance.** The spec describes a DB already
-  provisioned on a free-tier server; this environment had no credentials
-  for it. Docker was available but its daemon wasn't running and starting
-  it mid-session didn't complete in time to run a real end-to-end pass
-  against Postgres specifically. Everything that depends on Postgres-
-  specific behavior (`xmin`, the unique-constraint-violation translation
-  path) is covered by the hand-rolled concurrency test instead, which
-  models that behavior deterministically without needing the real engine —
-  see `docs/DEBUGGING.md` for why that's a reasonable substitute and what
-  it can't catch. **Before relying on this in production, run the full
-  suite once against a real Postgres instance**, particularly
-  `ReservationsApiTests` and the concurrency tests.
-- **Frontend was checked structurally** (build, lint, DOM inspection of
-  the FindLocker page's loading/error states) rather than with a full
-  click-through of all four screens against live data, for the same reason.
+1. **`POST /api/reservations` returned 500 on every call.**
+   `EfUnitOfWork` starts a transaction manually
+   (`Database.BeginTransactionAsync`), but the DbContext is also configured
+   with `EnableRetryOnFailure` for resilience against a pooled connection.
+   EF Core forbids combining the two unless the whole unit runs through
+   `Database.CreateExecutionStrategy()` — otherwise it throws
+   `InvalidOperationException` before touching the database at all. The
+   EF Core `InMemory` provider used by `LockGoWebApplicationFactory` doesn't
+   implement retrying execution strategies, so this code path was simply
+   never exercised by `ReservationsApiTests` despite them covering the same
+   endpoint. **Fixed** by wrapping the transaction in
+   `CreateExecutionStrategy().ExecuteAsync(...)` — safe to retry as a whole
+   unit specifically because `CreateInTransactionAsync` is already
+   idempotent (see `docs/DEBUGGING.md`).
+
+2. **`size` + `availability` combined incorrectly.** `LockerRepository.SearchAsync`
+   checked `Compartments.Any(c => c.Size == size)` and
+   `Compartments.Any(c => c.Status == Available)` as two independent
+   filters. A locker with an *occupied* Small compartment but an
+   *available* Medium one passed both checks separately, even though it had
+   no available compartment matching the requested size — `GET
+   /api/lockers?size=S&availability=true` would still return it. This is
+   exactly what the project spec's seed data couldn't reveal (every seeded
+   locker starts with all three sizes available, so no combination of
+   filters excludes anything until a booking changes one compartment's
+   status) — it only showed up once a real reservation had been made
+   against the live database. **Fixed** by combining both conditions into
+   one `Any()` predicate over the same compartment; `LockerService` was
+   also updated so a size-filtered search's `minPrice`/
+   `availableCompartmentCount` reflect only that size instead of the
+   locker's other compartments.
+
+Both are covered by new tests —
+`GetLockers_FilteredBySizeAndAvailability_ExcludesLockerWhoseOnlyAvailableCompartmentIsADifferentSize`
+in `LockersApiTests.cs` (which manipulates compartment state directly via
+the DbContext to reproduce the exact scenario) and
+`SearchAsync_WhenFilteredBySize_ReportsPriceAndAvailabilityForThatSizeOnly`
+in `LockerServiceTests.cs` — and both were re-verified against the live
+Neon instance afterward, including firing two genuinely concurrent
+`POST /api/reservations` requests with the same idempotency key at the real
+database and confirming they returned the identical reservation.
+
+**Takeaway kept for the record:** this is the second time in this project
+that a concurrency/infrastructure bug survived a fully-passing test suite
+because the test double (EF Core `InMemory`) doesn't implement the same
+code paths as the real provider. The `RacyReservationRepository` fake in
+`docs/DEBUGGING.md` was a deliberate, deterministic substitute for exactly
+this reason; the execution-strategy bug here is the opposite lesson —
+sometimes there's no substitute for running against the real thing at least
+once.
+
+Frontend was still only checked structurally (build, lint, DOM inspection
+of the FindLocker page's loading/error states) rather than a full
+click-through of all four screens against live data — that remains
+unverified.

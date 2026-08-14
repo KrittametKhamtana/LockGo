@@ -5,14 +5,12 @@
       "Microsoft.AspNetCore": "Warning"
     }
   },
-  "AllowedHosts": "*",
-  "AllowedOrigins": [ "http://localhost:5173" ],
   "Database": {
-    "Host": "",
+    "Host": "localhost",
     "Port": 5432,
-    "Database": "",
-    "Username": "",
-    "Password": "",
+    "Database": "lockgo",
+    "Username": "lockgo",
+    "Password": "CHANGE_ME",
     "MaximumPoolSize": 10,
     "SslMode": "Require"
   }

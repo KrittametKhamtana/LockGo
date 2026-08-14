@@ -4,6 +4,7 @@ using LockGo.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace LockGo.Infrastructure;
 
@@ -12,8 +13,25 @@ public static class DependencyInjection
     /// <summary>Full production wiring: Postgres-backed DbContext + repositories.</summary>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("Default")
-            ?? throw new InvalidOperationException("Connection string 'Default' is not configured.");
+        var dbOptions = configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>()
+            ?? throw new InvalidOperationException($"Config section '{DatabaseOptions.SectionName}' is not configured.");
+
+        if (string.IsNullOrWhiteSpace(dbOptions.Host) || string.IsNullOrWhiteSpace(dbOptions.Database))
+        {
+            throw new InvalidOperationException(
+                $"'{DatabaseOptions.SectionName}:Host' and '{DatabaseOptions.SectionName}:Database' must be set (see appsettings.Development.json).");
+        }
+
+        var connectionString = new NpgsqlConnectionStringBuilder
+        {
+            Host = dbOptions.Host,
+            Port = dbOptions.Port,
+            Database = dbOptions.Database,
+            Username = dbOptions.Username,
+            Password = dbOptions.Password,
+            MaxPoolSize = dbOptions.MaximumPoolSize,
+            SslMode = Enum.Parse<SslMode>(dbOptions.SslMode, ignoreCase: true),
+        }.ConnectionString;
 
         services.AddDbContext<LockGoDbContext>(options =>
             options

@@ -59,19 +59,31 @@ docs/                     Architecture, API docs, debugging write-up, AI usage
 ## Database setup
 
 1. Create a database (any name — `lockgo` is used below).
-2. Set the connection string. For local development, edit
-   `LockGo.Api/LockGo.Api/appsettings.Development.json`:
+2. Copy `LockGo.Api/LockGo.Api/appsettings.Development.json.example` to
+   `appsettings.Development.json` (gitignored — never commit real
+   credentials) and fill in the `Database` section:
 
    ```json
    {
-     "ConnectionStrings": {
-       "Default": "Host=localhost;Port=5432;Database=lockgo;Username=lockgo;Password=YOUR_PASSWORD;Maximum Pool Size=10"
+     "Database": {
+       "Host": "localhost",
+       "Port": 5432,
+       "Database": "lockgo",
+       "Username": "lockgo",
+       "Password": "YOUR_PASSWORD",
+       "MaximumPoolSize": 10,
+       "SslMode": "Require"
      }
    }
    ```
 
-   (`appsettings.json`'s `ConnectionStrings:Default` is intentionally left
-   blank — don't put real credentials there, since that file is committed.)
+   Connection details are structured fields rather than one raw ADO.NET
+   connection string, built into one via `NpgsqlConnectionStringBuilder` in
+   `LockGo.Infrastructure.DependencyInjection`. Set `SslMode` to `Disable`
+   for a local Postgres without TLS; hosted providers (Neon, Supabase, RDS,
+   etc.) generally need `Require` or stronger.
+   `appsettings.json`'s `Database` section is intentionally left blank —
+   that file **is** committed, so no real credentials belong there.
 
 3. Apply migrations. The app does this automatically on startup outside the
    `Testing` environment (see `Program.cs`), or run it manually:
@@ -113,11 +125,12 @@ cd LockGo.Api
 dotnet test
 ```
 
-20 tests: unit tests for `ReservationService`'s business rules (reserve
-success / no-availability / double-booking prevention / idempotent replay),
-a dedicated concurrency suite proving a double-clicked Confirm button can't
-create two reservations (see `docs/DEBUGGING.md`), and HTTP-level
-integration tests via `WebApplicationFactory`.
+22 tests: unit tests for `ReservationService`'s and `LockerService`'s
+business rules (reserve success / no-availability / double-booking
+prevention / idempotent replay / size-filtered pricing), a dedicated
+concurrency suite proving a double-clicked Confirm button can't create two
+reservations (see `docs/DEBUGGING.md`), and HTTP-level integration tests
+via `WebApplicationFactory`.
 
 Frontend:
 
@@ -127,16 +140,20 @@ npm run lint
 npm run build   # also type-checks (tsc -b)
 ```
 
-## What wasn't verified here
+## Verified against a live database
 
-No live Postgres instance was available in the environment this was built
-in (Docker's daemon was installed but not running, and starting it didn't
-complete during the session). Everything Postgres-specific (the `xmin`
-concurrency path, the unique-constraint-violation translation) is exercised
-by a deterministic hand-rolled concurrency test instead of a real database —
-see [`docs/AI_USAGE.md`](docs/AI_USAGE.md#4-what-wasnt-verified) for exactly
-what that does and doesn't cover. **Run `dotnet test` once against a real
-Postgres instance before treating this as production-ready.**
+The full flow (search → detail → reserve → confirm, including firing two
+genuinely concurrent double-click requests) has been run against a real
+hosted Postgres instance (Neon), not just the test suite's InMemory
+provider. That pass caught two real bugs that every automated test had
+missed — an `EnableRetryOnFailure`/manual-transaction conflict that made
+every reservation fail with a 500, and a `size`+`availability` filter
+combination bug — both fixed and now covered by tests. Full story in
+[`docs/AI_USAGE.md`](docs/AI_USAGE.md#4-live-postgres-verification--and-two-real-bugs-it-caught).
+
+Not yet done: `EXPLAIN ANALYZE` against a realistic data volume (the seed
+data is only a handful of rows), and a full click-through of all four
+frontend screens against live data.
 
 ## Git workflow
 

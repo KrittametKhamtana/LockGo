@@ -16,40 +16,53 @@ public class EfUnitOfWork : IUnitOfWork
         _db = db;
     }
 
-    public async Task<TResult> ExecuteInTransactionAsync<TResult>(
+    public Task<TResult> ExecuteInTransactionAsync<TResult>(
         Func<CancellationToken, Task<TResult>> operation,
         CancellationToken ct = default)
     {
-        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        // The DbContext is configured with EnableRetryOnFailure (transient-error
+        // resilience against a pooled connection to a hosted Postgres instance).
+        // That execution strategy forbids a manually-started transaction unless the
+        // whole "begin/operation/commit" unit is run through it — otherwise EF
+        // throws InvalidOperationException on every call. Wrapping it here also
+        // means a genuinely transient failure retries the entire attempt, which is
+        // safe precisely because CreateInTransactionAsync is idempotent (it re-checks
+        // the idempotency key before inserting).
+        var strategy = _db.Database.CreateExecutionStrategy();
 
-        try
+        return strategy.ExecuteAsync(async () =>
         {
-            var result = await operation(ct);
-            await _db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
-            return result;
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            // Two genuinely different requests (not a double-click replay — different
-            // idempotency keys) both passed the overlap check before either committed.
-            // Postgres serializes their compartment-status UPDATEs; the loser's xmin
-            // is stale, EF reports 0 rows affected here. This is the actual mutual
-            // exclusion for rule 2 (no double-booking) — the earlier overlap read
-            // alone can't guarantee it under READ COMMITTED.
-            await transaction.RollbackAsync(ct);
-            throw new ConflictException("NO_AVAILABILITY", "This compartment was just booked by another request.");
-        }
-        catch (DbUpdateException ex) when (IsIdempotencyKeyUniqueViolation(ex))
-        {
-            await transaction.RollbackAsync(ct);
-            throw new IdempotencyKeyConflictException("(see inner exception for the offending key)");
-        }
-        catch
-        {
-            await transaction.RollbackAsync(ct);
-            throw;
-        }
+            await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+
+            try
+            {
+                var result = await operation(ct);
+                await _db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+                return result;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // Two genuinely different requests (not a double-click replay — different
+                // idempotency keys) both passed the overlap check before either committed.
+                // Postgres serializes their compartment-status UPDATEs; the loser's xmin
+                // is stale, EF reports 0 rows affected here. This is the actual mutual
+                // exclusion for rule 2 (no double-booking) — the earlier overlap read
+                // alone can't guarantee it under READ COMMITTED.
+                await transaction.RollbackAsync(ct);
+                throw new ConflictException("NO_AVAILABILITY", "This compartment was just booked by another request.");
+            }
+            catch (DbUpdateException ex) when (IsIdempotencyKeyUniqueViolation(ex))
+            {
+                await transaction.RollbackAsync(ct);
+                throw new IdempotencyKeyConflictException("(see inner exception for the offending key)");
+            }
+            catch
+            {
+                await transaction.RollbackAsync(ct);
+                throw;
+            }
+        });
     }
 
     /// <summary>

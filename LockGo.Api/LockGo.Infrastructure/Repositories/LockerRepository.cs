@@ -23,12 +23,22 @@ public class LockerRepository : ILockerRepository
             .Include(l => l.Compartments)
             .AsQueryable();
 
-        if (Enum.TryParse<CompartmentSize>(query.Size, ignoreCase: true, out var size))
+        var hasSizeFilter = Enum.TryParse<CompartmentSize>(query.Size, ignoreCase: true, out var size);
+        var availableOnly = query.AvailableOnly == true;
+
+        // Size and availability must be checked on the SAME compartment — two
+        // separate Any() calls would pass a locker whose only available
+        // compartment is the wrong size (its occupied S plus available M both
+        // satisfy their own Any() independently, even with no available S).
+        if (hasSizeFilter && availableOnly)
+        {
+            lockers = lockers.Where(l => l.Compartments.Any(c => c.Size == size && c.Status == CompartmentStatus.Available));
+        }
+        else if (hasSizeFilter)
         {
             lockers = lockers.Where(l => l.Compartments.Any(c => c.Size == size));
         }
-
-        if (query.AvailableOnly == true)
+        else if (availableOnly)
         {
             lockers = lockers.Where(l => l.Compartments.Any(c => c.Status == CompartmentStatus.Available));
         }
