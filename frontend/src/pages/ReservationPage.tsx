@@ -84,6 +84,15 @@ export function ReservationPage() {
           value={durationHours}
           onChange={(_, value) => value !== null && setDurationHours(value)}
           color="primary"
+          sx={{
+            flexWrap: "wrap",
+            gap: 1,
+            "& .MuiToggleButtonGroup-grouped": {
+              flex: { xs: "1 1 calc(33.333% - 8px)", sm: "0 0 auto" },
+              borderRadius: "8px !important",
+              border: "1px solid !important",
+            },
+          }}
         >
           {DURATION_OPTIONS.map((option) => (
             <ToggleButton key={option.hours} value={option.hours}>
