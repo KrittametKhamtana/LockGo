@@ -1,0 +1,20 @@
+# .NET
+LockGo.Api/**/bin/
+LockGo.Api/**/obj/
+*.user
+.vs/
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/*.local
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Claude Code local config
+.claude/

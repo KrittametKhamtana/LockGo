@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="LockGo.Api/LockGo.Api.csproj" />
+  <Project Path="LockGo.Application/LockGo.Application.csproj" />
+  <Project Path="LockGo.Domain/LockGo.Domain.csproj" />
+  <Project Path="LockGo.Infrastructure/LockGo.Infrastructure.csproj" />
+  <Project Path="LockGo.Tests/LockGo.Tests.csproj" />
+</Solution>
