@@ -54,10 +54,12 @@ public class LockersApiTests : IClassFixture<LockGoWebApplicationFactory>, IAsyn
     public async Task GetLockers_SearchMatchesNameOrAddressCaseInsensitively()
     {
         var byName = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?search=chatuchak");
-        var byAddress = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?search=silom");
+        // Two seeded lockers share "Silom" in their address — assert the match
+        // is address-based and case-insensitive, not that it's unique.
+        var byAddress = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?search=charoen nakhon");
 
         byName.Should().ContainSingle(l => l.Name.Contains("Chatuchak"));
-        byAddress.Should().ContainSingle(l => l.Address.Contains("Silom"));
+        byAddress.Should().ContainSingle(l => l.Address.Contains("Charoen Nakhon"));
     }
 
     [Fact]
