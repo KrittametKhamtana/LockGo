@@ -20,6 +20,7 @@ Search Locker → View Detail → Reserve → Confirmation
 8. [Run Test](#8-run-test)
 9. [API Documentation](#9-api-documentation)
 10. [AI Tools ที่ใช้](#10-ai-tools-ที่ใช้)
+11. [Git Workflow](#git-workflow)
 
 Deep-dive references: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (full
 diagram + the concurrency-critical reservation path),
