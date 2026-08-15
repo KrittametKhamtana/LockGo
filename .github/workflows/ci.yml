@@ -91,8 +91,12 @@ jobs:
           context: frontend
           file: frontend/Dockerfile
           push: true
+          # Repo variable, not hardcoded — starts as http://<server-ip>:8081/api
+          # (direct-IP mode, no domain yet) and changes to
+          # https://<api-domain>/api later with zero workflow edits. Set at
+          # Settings → Secrets and variables → Actions → Variables.
           build-args: |
-            VITE_API_BASE_URL=https://lockgo-api.duckdns.org/api
+            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/lockgo-ui:latest
             ghcr.io/${{ github.repository_owner }}/lockgo-ui:${{ github.sha }}

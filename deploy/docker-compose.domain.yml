@@ -1,0 +1,44 @@
+# Domain mode — use once a real domain (e.g. two DuckDNS names, see
+# docs/DEPLOYMENT.md) is pointed at this server. A full alternate compose
+# file rather than an override layered on docker-compose.yml, because
+# Compose merges list fields like `ports` across -f files instead of
+# letting an override remove them — simplest to just keep the two modes
+# as separate, complete files.
+#
+# Switching from direct-IP mode:
+#   docker compose down
+#   # edit Caddyfile: replace the two placeholder hostnames with your real ones
+#   docker compose -f docker-compose.domain.yml up -d
+#
+# api/ui are no longer published on host ports directly — only Caddy is,
+# and it terminates TLS (automatic Let's Encrypt certs, one per hostname)
+# and reverse-proxies to each by Host header.
+
+services:
+  api:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-YOUR_GITHUB_USERNAME}/lockgo-api:latest
+    restart: unless-stopped
+    env_file: .env
+    expose:
+      - "8080"
+
+  ui:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-YOUR_GITHUB_USERNAME}/lockgo-ui:latest
+    restart: unless-stopped
+    expose:
+      - "80"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
