@@ -15,8 +15,8 @@ flowchart LR
     end
 
     subgraph "LockGo.Api (ASP.NET Core)"
-        Controllers[Controllers<br/>LockersController / ReservationsController]
-        AppLayer[Application<br/>LockerService / ReservationService]
+        Controllers[Controllers<br/>LockersController / ReservationsController / AuthController]
+        AppLayer[Application<br/>LockerService / ReservationService / AuthService]
         Infra[Infrastructure<br/>EF Core Repositories / EfUnitOfWork]
     end
 
@@ -107,7 +107,7 @@ limited RAM — a lock held for the duration of a transaction blocks other
 connections on a server that can't spare many of them; an optimistic check
 only costs something on the rare occasion two writes actually collide.
 
-See [`docs/DEBUGGING.md`](DEBUGGING.md) for a real race condition this
+See [`deliverables/DEBUGGING.md`](DEBUGGING.md) for a real race condition this
 design surfaced (and fixed) during test-writing.
 
 ## Availability model
@@ -135,6 +135,17 @@ IsActive => Status == ReservationStatus.Active && EndTime > DateTimeOffset.UtcNo
 No cron job, no background worker — one less service running on a
 resource-constrained box.
 
+## Auth
+
+Sign-up/sign-in (`AuthController` → `AuthService`) issue a JWT
+(`Microsoft.AspNetCore.Authentication.JwtBearer` validates it server-side);
+passwords are hashed with BCrypt. No endpoint currently requires
+`[Authorize]` — reservations are still attributed to a single mock user
+(`MockUser`) regardless of who's signed in, so the token is real and
+validated, but not yet load-bearing anywhere. This is a deliberate
+boundary, not an oversight: wiring reservations to the authenticated user
+is a follow-on change, not a half-finished one.
+
 ## Frontend
 
 ```
@@ -154,6 +165,9 @@ reservation ID instead, so the confirmation URL is shareable/refreshable on
 its own.
 
 The idempotency key for a reservation is generated once per visit to the
-Reservation page (`useMemo(() => crypto.randomUUID(), [])`) and reused for
+Reservation page (`useMemo(() => generateUUID(), [])`) and reused for
 every Confirm click, including a resend after a double-click — see
-[Business rule 4](DEBUGGING.md).
+[Business rule 4](DEBUGGING.md). `generateUUID()` wraps `crypto.randomUUID()`
+with a `crypto.getRandomValues()`-based fallback, since `randomUUID()` only
+exists in a secure context (HTTPS/`localhost`) and the current deployment
+is direct-IP HTTP — see [`src/utils/uuid.ts`](../frontend/src/utils/uuid.ts).

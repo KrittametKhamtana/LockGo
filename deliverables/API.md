@@ -27,7 +27,7 @@ on what "free" means.
 ## Auth
 
 No endpoint currently requires the token these issue — see
-[`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for why that's deliberate.
+[`deliverables/ARCHITECTURE.md`](ARCHITECTURE.md) for why that's deliberate.
 Passwords are hashed with BCrypt; tokens are JWTs signed with the `Jwt:Secret`
 from configuration.
 
@@ -164,8 +164,8 @@ race for the one it picked, so two concurrent requests for the same size
 correctly land on two different compartments rather than one failing
 outright while a sibling was free. **Idempotent** on `idempotencyKey` —
 safe to retry, including a rapid double-click resending the same request;
-see [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#the-concurrency-critical-path-post-apireservations)
-and [`docs/DEBUGGING.md`](DEBUGGING.md).
+see [`deliverables/ARCHITECTURE.md`](ARCHITECTURE.md#the-concurrency-critical-path-post-apireservations)
+and [`deliverables/DEBUGGING.md`](DEBUGGING.md).
 
 `startTime` is client-supplied (advance booking, not just immediate-use) —
 the server only checks it's within a sane range and uses it as-is for the

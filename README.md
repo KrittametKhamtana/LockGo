@@ -22,14 +22,18 @@ Search Locker → View Detail → Reserve → Confirmation
 10. [AI Tools ที่ใช้](#10-ai-tools-ที่ใช้)
 11. [Git Workflow](#git-workflow)
 
-Deep-dive references: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (full
-diagram + the concurrency-critical reservation path),
-[`docs/API.md`](docs/API.md) (complete request/response shapes),
-[`docs/DEBUGGING.md`](docs/DEBUGGING.md) (a real race condition found and
-fixed while writing the concurrency tests),
-[`docs/AI_USAGE.md`](docs/AI_USAGE.md) (prompts, AI-vs-human decisions, a
-self code-review),
-[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) (Docker images, GitHub
+Deep-dive references, all in [`deliverables/`](deliverables/) (also the
+assessment submission folder — see its
+[`README.md`](deliverables/README.md) for the full checklist mapping):
+[`ARCHITECTURE.md`](deliverables/ARCHITECTURE.md) (full diagram + the
+concurrency-critical reservation path), [`DATABASE.md`](deliverables/DATABASE.md)
+(ERD, column/index reference, migrations), [`API.md`](deliverables/API.md)
+(complete request/response shapes), [`TESTING.md`](deliverables/TESTING.md)
+(what's covered, how to run, live-DB verification),
+[`AI-WORKFLOW.md`](deliverables/AI-WORKFLOW.md) (the build process as a
+diagram), [`DEBUGGING.md`](deliverables/DEBUGGING.md) (a real race
+condition found and fixed while writing the concurrency tests),
+[`DEPLOYMENT.md`](deliverables/DEPLOYMENT.md) (Docker images, GitHub
 Actions CD to an existing server, DuckDNS + Caddy).
 
 ---
@@ -60,7 +64,7 @@ sign-in.
 **Bonus**: account sign-up and sign-in issue a JWT, stored client-side.
 Reservations don't require being signed in yet — every booking is still
 attributed to a single mock user by design (see
-[docs/AI_USAGE.md](docs/AI_USAGE.md) for why that boundary was kept
+[deliverables/AI_USAGE.md](deliverables/AI_USAGE.md) for why that boundary was kept
 deliberate rather than half-wired).
 
 **Data model at a glance**: `Locker` 1—N `Compartment` (several
@@ -129,8 +133,8 @@ for a transaction's duration blocks other connections on a server that
 can't spare many of them; an optimistic check only costs something on the
 rare occasion two writes actually collide. Full mechanics, plus a real bug
 this design surfaced during test-writing, in
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and
-[`docs/DEBUGGING.md`](docs/DEBUGGING.md).
+[`deliverables/ARCHITECTURE.md`](deliverables/ARCHITECTURE.md) and
+[`deliverables/DEBUGGING.md`](deliverables/DEBUGGING.md).
 
 **Availability model.** `Compartment.Status` is denormalized (fast reads
 only, never trusted on the write path). Multiple compartments can share a
@@ -160,12 +164,12 @@ gate endpoints later without it being decorative today.
 | Database | PostgreSQL | Specified — already provisioned on a free-tier server, hence the low-connection-pool, index-conscious design throughout |
 | API docs | Swashbuckle (Swagger/OpenAPI) | Interactive docs for free from the existing controller/DTO annotations |
 | Backend testing | xUnit, Moq, FluentAssertions **7.x**, `Microsoft.AspNetCore.Mvc.Testing`, EF Core InMemory | FluentAssertions pinned below 8.x deliberately — v8+ moved to a commercial license, 7.x is the last MIT-licensed release |
-| CI/CD | GitHub Actions, Docker, GHCR, Caddy | No self-hosted agent needed, unlike Jenkins — the target server can't spare RAM for one (it was literally running Jenkins for an earlier project; retiring that was part of this move). Full pipeline: test → build+push images to GHCR → SSH deploy → Caddy reverse-proxies both containers with automatic Let's Encrypt TLS. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) |
+| CI/CD | GitHub Actions, Docker, GHCR, Caddy | No self-hosted agent needed, unlike Jenkins — the target server can't spare RAM for one (it was literally running Jenkins for an earlier project; retiring that was part of this move). Full pipeline: test → build+push images to GHCR → SSH deploy → Caddy reverse-proxies both containers with automatic Let's Encrypt TLS. See [`deliverables/DEPLOYMENT.md`](deliverables/DEPLOYMENT.md) |
 
 MUI is pinned to **7.3.11** rather than the newest `9.x` tag — `9.3.1`'s
 type definitions broke `Stack`/`Typography` prop typing under current
 TypeScript in a way that failed the build. `7.3.11` is the latest *stable*
-major release. Full story in [`docs/AI_USAGE.md`](docs/AI_USAGE.md).
+major release. Full story in [`deliverables/AI_USAGE.md`](deliverables/AI_USAGE.md).
 
 ### Project structure
 
@@ -177,7 +181,7 @@ LockGo.Api/              .NET solution
   LockGo.Infrastructure/  EF Core DbContext, migrations, repositories
   LockGo.Tests/           xUnit: unit, concurrency, integration
 frontend/                 React + Vite + TS + MUI
-docs/                     Architecture, API docs, debugging write-up, AI usage
+deliverables/              Assessment submission docs — see below
 deploy/                   Compose files (direct-IP + domain mode) and Caddyfile
 .github/workflows/        CI (build + test, both projects)
 ```
@@ -260,6 +264,9 @@ VITE_API_BASE_URL=http://localhost:5117/api
 
 ## 6. Database Setup
 
+Schema reference (ERD, column/index detail, migrations):
+[`deliverables/DATABASE.md`](deliverables/DATABASE.md).
+
 1. Create a database (any name — `lockgo` is used below).
 2. Copy `LockGo.Api/LockGo.Api/appsettings.Development.json.example` to
    `appsettings.Development.json` and fill in the `Database` (and
@@ -319,6 +326,9 @@ origin by default (`AllowedOrigins` in `appsettings.json`).
 
 ## 8. Run Test
 
+Full test documentation (what's covered per class, live-DB verification):
+[`deliverables/TESTING.md`](deliverables/TESTING.md).
+
 **Backend**
 
 ```bash
@@ -335,7 +345,7 @@ dotnet test
 - **Concurrency** — a dedicated suite proving a double-clicked Confirm
   button can't create two reservations, *and* that two concurrent requests
   for the same size correctly consume two separate compartments rather
-  than colliding on one. See [`docs/DEBUGGING.md`](docs/DEBUGGING.md) for
+  than colliding on one. See [`deliverables/DEBUGGING.md`](deliverables/DEBUGGING.md) for
   why this needed a hand-rolled fake with real thread synchronization
   rather than a mock — the first version of this test passed for the
   wrong reason, which is worth reading if you're writing similar tests.
@@ -355,7 +365,7 @@ npm run build   # also type-checks (tsc -b)
 There's no frontend unit-test runner configured (no Vitest/Jest) — `lint`
 + `build`'s type-check are what CI enforces. Feature-level verification
 was done by driving the running app in a real browser (see
-[`docs/AI_USAGE.md`](docs/AI_USAGE.md) and [§9](#9-api-documentation)'s
+[`deliverables/AI_USAGE.md`](deliverables/AI_USAGE.md) and [§9](#9-api-documentation)'s
 live-database note below) rather than automated frontend tests.
 
 **Verified against a live database.** The full flow (search → detail →
@@ -366,7 +376,7 @@ that every automated test had missed — an `EnableRetryOnFailure`/
 manual-transaction conflict that made every reservation fail with a 500,
 and a `size`+`availability` filter combination bug — both fixed and now
 covered by tests. Full story in
-[`docs/AI_USAGE.md`](docs/AI_USAGE.md#4-live-postgres-verification--and-two-real-bugs-it-caught).
+[`deliverables/AI_USAGE.md`](deliverables/AI_USAGE.md#4-live-postgres-verification--and-two-real-bugs-it-caught).
 
 Not yet done: `EXPLAIN ANALYZE` against a realistic data volume (the seed
 data is only a handful of rows per locker).
@@ -377,7 +387,7 @@ data is only a handful of rows per locker).
 
 Base URL (local dev): `http://localhost:5117/api`. Interactive Swagger UI:
 `http://localhost:5117/swagger`. Full request/response shapes and error
-tables: [`docs/API.md`](docs/API.md) — summary below.
+tables: [`deliverables/API.md`](deliverables/API.md) — summary below.
 
 All error responses share one shape:
 
@@ -436,7 +446,7 @@ architecture, the specific EF Core mechanics for an API that changed
 underneath the spec's description, the whole test suite's design), and a
 self-review of the highest-stakes code section (correctness/security/
 performance/maintainability findings, with fixes) — is in
-[`docs/AI_USAGE.md`](docs/AI_USAGE.md).
+[`deliverables/AI_USAGE.md`](deliverables/AI_USAGE.md).
 
 Worth calling out here specifically: two real, non-staged incidents came
 out of this process rather than being hidden —
@@ -445,12 +455,12 @@ out of this process rather than being hidden —
   fake it raced against resolved synchronously, so nothing was actually
   racing) — caught by deliberately disabling the fix and confirming the
   test still passed, which it shouldn't have. Full story:
-  [`docs/DEBUGGING.md`](docs/DEBUGGING.md).
+  [`deliverables/DEBUGGING.md`](deliverables/DEBUGGING.md).
 - Two **real bugs found only once a live Postgres instance became
   available** mid-project — every automated test, including the
   integration suite, had missed both, because the InMemory test provider
   doesn't implement the code paths involved. Full story:
-  [`docs/AI_USAGE.md`](docs/AI_USAGE.md#4-live-postgres-verification--and-two-real-bugs-it-caught).
+  [`deliverables/AI_USAGE.md`](deliverables/AI_USAGE.md#4-live-postgres-verification--and-two-real-bugs-it-caught).
 
 ---
 
@@ -486,7 +496,7 @@ Two long-lived branches:
   Day-to-day work lands here first.
 - **`master`** — the release branch. Every push here builds both Docker
   images and deploys them automatically (see
-  [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)) — merging to `master` is a
+  [`deliverables/DEPLOYMENT.md`](deliverables/DEPLOYMENT.md)) — merging to `master` is a
   real release, not just a commit.
 
 **Flow for a unit of work:**
