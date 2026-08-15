@@ -177,6 +177,7 @@ LockGo.Api/              .NET solution
   LockGo.Tests/           xUnit: unit, concurrency, integration
 frontend/                 React + Vite + TS + MUI
 docs/                     Architecture, API docs, debugging write-up, AI usage
+deploy/                   Compose files (direct-IP + domain mode) and Caddyfile
 .github/workflows/        CI (build + test, both projects)
 ```
 
