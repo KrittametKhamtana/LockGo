@@ -164,8 +164,7 @@ race for the one it picked, so two concurrent requests for the same size
 correctly land on two different compartments rather than one failing
 outright while a sibling was free. **Idempotent** on `idempotencyKey` —
 safe to retry, including a rapid double-click resending the same request;
-see [`deliverables/ARCHITECTURE.md`](ARCHITECTURE.md#the-concurrency-critical-path-post-apireservations)
-and [`deliverables/DEBUGGING.md`](DEBUGGING.md).
+see [`ARCHITECTURE.md`](ARCHITECTURE.md#the-concurrency-critical-path-post-apireservations).
 
 `startTime` is client-supplied (advance booking, not just immediate-use) —
 the server only checks it's within a sane range and uses it as-is for the

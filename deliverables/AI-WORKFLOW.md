@@ -1,54 +1,45 @@
 # AI Workflow
 
-How this project was actually built: one continuous agentic session with
-Claude Code (Claude Sonnet 5), working from a written project spec rather
-than turn-by-turn chat. The AI decomposed the spec into sub-goals and
-executed them self-directed; the human reviewed results and steered at
-decision points rather than dictating every step.
-
-> **Scope note:** this document covers the *workflow* only. The actual
-> prompt text and the standalone AI-generated-code review are separate
-> deliverable items, tracked but not included here yet.
-
 ```mermaid
 flowchart TD
-    A(["Written project spec<br/>tech stack, screens, API shape,<br/>data model, business rules 1-4"]) --> B[AI decomposes spec into sub-goals]
-    B --> C["Scaffold backend + frontend<br/>(latest tooling per spec)"]
-    C --> D{Build issue?}
-    D -- "MUI 9.3.1 breaks<br/>TS prop typing" --> E["Pin to 7.3.11<br/>(latest stable major)"]
-    D -- ok --> F
-    E --> F[Implement business rules 1-4]
-    F --> G["Write tests, incl.<br/>concurrency suite"]
-    G --> H{"Concurrency test actually<br/>proves the guarantee?"}
-    H -- "No — passed for the wrong reason<br/>(fake resolved synchronously)" --> I["Rewrite fake with real<br/>thread sync (Barrier)"]
-    I --> G
-    H -- Yes --> J["Verify in a real browser<br/>(not just dotnet build)"]
-    J --> K["Human review<br/>at decision points"]
-    K --> L["Live Postgres becomes available"]
-    L --> M["Run full flow against<br/>the real database"]
-    M --> N{"Bugs the InMemory<br/>provider couldn't reveal?"}
-    N -- "Yes — 2 found" --> O["Fix + add regression tests"]
-    O --> P["Self code-review of the<br/>highest-stakes section"]
-    N -- No --> P
-    P --> Q(["Deliverable"])
+    A[กำหนด role AI] --> B[AI รู้ Role]
+    B --> C[Business model]
+    C --> D[AI ทำความเข้าใจ Business]
+    D --> E[AI สรุป Requirement]
+    E --> F[Develop Review]
+    F --> G[Develop กำหนด stack ย่อยๆ ที่จะทำ]
+    G --> H[AI ช่วยสร้าง Code]
+    H --> I[Develop Review]
+    I --> J[Testing]
+    J --> K[AI Bug Fix]
+    K --> L[Code Review]
+    L --> M([Final Code])
+
+    classDef ai fill:#1f6feb,stroke:#1158c7,color:#ffffff
+    classDef dev fill:#238636,stroke:#1a7f37,color:#ffffff
+    classDef out fill:#8250df,stroke:#6639ba,color:#ffffff
+
+    class B,D,E,H,K ai
+    class A,C,F,G,I,J,L dev
+    class M out
 ```
 
-## Human-decided vs. AI-decided
+🔵 AI ทำ 　　 🟢 Develop ตัดสินใจ 　　 🟣 ผลลัพธ์
 
-**Human-decided (in the spec):** feature scope and user flow; exact tech
-stack; the data model and field names; all four business rules, including
-the specific mechanism mandated for rule 4 (idempotency key + optimistic
-concurrency, not pessimistic locking); the hybrid availability model; the
-error-shape contract; the testing bar ("prove double-click doesn't
-duplicate"); the deliverables checklist itself.
+## ขั้นตอนไหน AI ทำ ขั้นตอนไหนคนตัดสินใจ
 
-**AI-decided (this session):** the concrete Clean-Architecture layering
-and repository/`IUnitOfWork` abstractions; the specific EF Core mechanics
-for mapping `xmin`; translating Postgres exceptions into the app's HTTP
-error shape; the entire test suite's design, including the hand-rolled
-concurrency fake; every line of application/UI code; dependency version
-choices; this documentation set.
-
-Full narrative — the two real bugs the live-database pass caught, and the
-concurrency test that initially passed for the wrong reason — in
-[`AI_USAGE.md`](AI_USAGE.md) and [`DEBUGGING.md`](DEBUGGING.md).
+| # | ขั้นตอน | ใครทำ | รายละเอียด |
+|---|---|---|---|
+| 1 | กำหนด role AI | 🟢 Develop | บอก AI ว่าต้องสวมบทบาทอะไร ก่อนเริ่มงานจริง |
+| 2 | AI รู้ Role | 🔵 AI | AI รับบทบาทและขอบเขตงานของตัวเอง |
+| 3 | Business model | 🟢 Develop | ส่งเอกสาร business ให้ AI พร้อมเปิดให้ถามกลับถ้าสงสัย |
+| 4 | AI ทำความเข้าใจ Business | 🔵 AI | อ่าน สรุป และถามกลับในจุดที่ยังไม่ชัด |
+| 5 | AI สรุป Requirement | 🔵 AI | เรียบเรียง requirement จากเอกสาร business ที่ได้รับ |
+| 6 | Develop Review | 🟢 Develop | ตรวจ requirement ที่ AI สรุปมา ก่อนปล่อยให้ลงมือ |
+| 7 | กำหนด stack ย่อยๆ ที่จะทำ | 🟢 Develop | เลือก tech stack และแบ่งงานเป็นก้อนย่อย |
+| 8 | AI ช่วยสร้าง Code | 🔵 AI | เขียน code ตาม stack และขอบเขตที่กำหนดให้ |
+| 9 | Develop Review | 🟢 Develop | ตรวจ code ที่ AI เขียน ก่อนเอาไปทดสอบ |
+| 10 | Testing | 🟢 Develop | รัน test และทดสอบการใช้งานจริง |
+| 11 | AI Bug Fix | 🔵 AI | แก้บั๊กที่เจอจากการทดสอบ |
+| 12 | Code Review | 🟢 Develop | ตรวจครั้งสุดท้าย ทั้งความถูกต้อง security performance และการดูแลต่อ |
+| 13 | Final Code | — | code ที่ผ่านการตรวจแล้ว พร้อมส่ง |

@@ -17,25 +17,7 @@ Review).
 | AI Prompt | ✅ | [`AI-PROMPTS.md`](AI-PROMPTS.md) (the prompt sequence used, with the goal behind each one) |
 | AI Generated Code Review | ✅ | [`AI-CODE-REVIEW.md`](AI-CODE-REVIEW.md) (review of the AI-written booking flow, UI → Service) |
 
-## How the two code-review documents differ
-
-Both exist on purpose and cover different code:
-
-- [`AI-CODE-REVIEW.md`](AI-CODE-REVIEW.md) — written in Thai, covering the
-  booking flow from the screen down to the service (`ReservationPage` →
-  `useCreateReservation` → API → `ReservationService.CreateAsync`) against
-  correctness/bugs, security, performance, and maintainability. Reports a
-  bug the 60-test suite can't catch, with the before/after code.
-- [`AI_USAGE.md`](AI_USAGE.md) §3 — covers a different section: the
-  internals of the reservation transaction (`CreateInTransactionAsync` +
-  `EfUnitOfWork`).
-
 ## Everything else in this folder
 
-- [`DEBUGGING.md`](DEBUGGING.md) — a real race condition found and fixed
-  while writing the concurrency tests.
 - [`DEPLOYMENT.md`](DEPLOYMENT.md) — Docker images, GitHub Actions CD,
   DuckDNS + Caddy.
-- [`AI_USAGE.md`](AI_USAGE.md) — the original full write-up this folder's
-  docs were extracted from. Still the only place covering the live-Postgres
-  pass and the two bugs it caught (§4).

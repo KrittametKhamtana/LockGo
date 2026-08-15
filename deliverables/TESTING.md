@@ -14,8 +14,8 @@ three kinds:
 No frontend automated test runner is configured (no Vitest/Jest) — `npm
 run lint` and `npm run build`'s type-check (`tsc -b`) are what CI enforces
 on the frontend. Feature-level frontend verification was done by driving
-the running app in a real browser instead — see
-[`AI_USAGE.md`](AI_USAGE.md) and the live-database section below.
+the running app in a real browser instead — see the live-database section
+below.
 
 ## Running the tests
 
@@ -76,8 +76,27 @@ right JSON":
 Needs a hand-rolled fake (`RacyReservationRepository`, `Barrier`-based)
 rather than a mock, because naive `Task.WhenAll` over a
 synchronously-resolving fake never actually races — the first version of
-this test passed for the wrong reason. Full story in
-[`DEBUGGING.md`](DEBUGGING.md).
+this test passed for the wrong reason.
+
+**How that was caught, and why it matters.** The fake's methods returned
+`Task.FromResult(...)`, so `await`ing them never yielded the thread: the
+two "concurrent" calls ran back to back on one thread and never overlapped.
+The tell was disabling the fix entirely (via a `when (false)` exception
+filter) and watching the test still pass — a concurrency test that passes
+with the fix removed is not testing concurrency. Adding a `Barrier` to the
+fake, forcing every caller to finish its "does this idempotency key already
+exist?" check before any of them may proceed to `Add()`, turned the
+check-then-insert race from something the scheduler *might* interleave into
+something it *always* does. Only then did a real bug surface: under
+`READ COMMITTED`, the second request's overlap check runs after the first
+has committed, finds that reservation, and would have thrown a false
+`NO_AVAILABILITY` — for a booking that was its own replay. The fix
+re-checks `idempotencyKey` before reporting a conflict
+(`ReservationService.CreateInTransactionAsync`).
+
+The lesson generalizes: if a test double resolves synchronously, add an
+explicit synchronization point rather than trusting the scheduler to
+interleave two near-instant fake calls.
 
 ### Integration — `LockersApiTests.cs`, `ReservationsApiTests.cs`, `AuthApiTests.cs`
 
@@ -106,7 +125,6 @@ That pass caught two real bugs every automated test had missed:
 Both are now fixed and covered by dedicated tests
 (`GetLockers_FilteredBySizeAndAvailability_ExcludesLockerWhoseOnlyAvailableCompartmentIsADifferentSize`,
 `SearchAsync_WhenFilteredBySize_ReportsHeadlinePriceAndCountForThatSizeOnly`).
-Full story: [`AI_USAGE.md`](AI_USAGE.md#4-live-postgres-verification--and-two-real-bugs-it-caught).
 
 **Not yet done:** `EXPLAIN ANALYZE` against a realistic data volume (seed
 data is only a handful of rows per locker); a full click-through of all

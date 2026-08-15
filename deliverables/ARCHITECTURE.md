@@ -107,8 +107,8 @@ limited RAM — a lock held for the duration of a transaction blocks other
 connections on a server that can't spare many of them; an optimistic check
 only costs something on the rare occasion two writes actually collide.
 
-See [`deliverables/DEBUGGING.md`](DEBUGGING.md) for a real race condition this
-design surfaced (and fixed) during test-writing.
+See [`TESTING.md`](TESTING.md) for a real race condition this design
+surfaced (and fixed) during test-writing.
 
 ## Availability model
 
@@ -166,8 +166,8 @@ its own.
 
 The idempotency key for a reservation is generated once per visit to the
 Reservation page (`useMemo(() => generateUUID(), [])`) and reused for
-every Confirm click, including a resend after a double-click — see
-[Business rule 4](DEBUGGING.md). `generateUUID()` wraps `crypto.randomUUID()`
+every Confirm click, including a resend after a double-click.
+`generateUUID()` wraps `crypto.randomUUID()`
 with a `crypto.getRandomValues()`-based fallback, since `randomUUID()` only
 exists in a secure context (HTTPS/`localhost`) and the current deployment
 is direct-IP HTTP — see [`src/utils/uuid.ts`](../frontend/src/utils/uuid.ts).

@@ -35,8 +35,6 @@ diagram), [`AI-PROMPTS.md`](deliverables/AI-PROMPTS.md) (the prompts used
 to drive the build, and the goal behind each),
 [`AI-CODE-REVIEW.md`](deliverables/AI-CODE-REVIEW.md) (a review of the
 AI-written booking flow — in Thai),
-[`DEBUGGING.md`](deliverables/DEBUGGING.md) (a real race
-condition found and fixed while writing the concurrency tests),
 [`DEPLOYMENT.md`](deliverables/DEPLOYMENT.md) (Docker images, GitHub
 Actions CD to an existing server, DuckDNS + Caddy).
 
@@ -67,9 +65,11 @@ sign-in.
 
 **Bonus**: account sign-up and sign-in issue a JWT, stored client-side.
 Reservations don't require being signed in yet — every booking is still
-attributed to a single mock user by design (see
-[deliverables/AI_USAGE.md](deliverables/AI_USAGE.md) for why that boundary was kept
-deliberate rather than half-wired).
+attributed to a single mock user by design. Wiring real users into
+reservations would have meant changing the booking flow, its tests, and the
+seeded data all at once; keeping auth additive means the token is genuinely
+issued and validated today, and gating endpoints later is a self-contained
+change rather than a half-finished one shipped early.
 
 **Data model at a glance**: `Locker` 1—N `Compartment` (several
 compartments can share the same size — e.g. 3× Small — so "how many are
@@ -137,8 +137,7 @@ for a transaction's duration blocks other connections on a server that
 can't spare many of them; an optimistic check only costs something on the
 rare occasion two writes actually collide. Full mechanics, plus a real bug
 this design surfaced during test-writing, in
-[`deliverables/ARCHITECTURE.md`](deliverables/ARCHITECTURE.md) and
-[`deliverables/DEBUGGING.md`](deliverables/DEBUGGING.md).
+[`deliverables/ARCHITECTURE.md`](deliverables/ARCHITECTURE.md).
 
 **Availability model.** `Compartment.Status` is denormalized (fast reads
 only, never trusted on the write path). Multiple compartments can share a
@@ -173,7 +172,7 @@ gate endpoints later without it being decorative today.
 MUI is pinned to **7.3.11** rather than the newest `9.x` tag — `9.3.1`'s
 type definitions broke `Stack`/`Typography` prop typing under current
 TypeScript in a way that failed the build. `7.3.11` is the latest *stable*
-major release. Full story in [`deliverables/AI_USAGE.md`](deliverables/AI_USAGE.md).
+major release.
 
 ### Project structure
 
@@ -349,10 +348,11 @@ dotnet test
 - **Concurrency** — a dedicated suite proving a double-clicked Confirm
   button can't create two reservations, *and* that two concurrent requests
   for the same size correctly consume two separate compartments rather
-  than colliding on one. See [`deliverables/DEBUGGING.md`](deliverables/DEBUGGING.md) for
-  why this needed a hand-rolled fake with real thread synchronization
-  rather than a mock — the first version of this test passed for the
-  wrong reason, which is worth reading if you're writing similar tests.
+  than colliding on one. This needed a hand-rolled fake with real thread
+  synchronization rather than a mock: the first version passed for the
+  wrong reason, because the fake resolved synchronously and the two
+  "concurrent" calls never actually raced. See
+  [`deliverables/TESTING.md`](deliverables/TESTING.md) for the full story.
 - **Integration** — HTTP-level tests via `WebApplicationFactory` (an
   in-memory test server + EF Core's InMemory provider), covering the
   lockers/reservations/auth endpoints end to end through real routing,
@@ -368,8 +368,7 @@ npm run build   # also type-checks (tsc -b)
 
 There's no frontend unit-test runner configured (no Vitest/Jest) — `lint`
 + `build`'s type-check are what CI enforces. Feature-level verification
-was done by driving the running app in a real browser (see
-[`deliverables/AI_USAGE.md`](deliverables/AI_USAGE.md) and [§9](#9-api-documentation)'s
+was done by driving the running app in a real browser (see the
 live-database note below) rather than automated frontend tests.
 
 **Verified against a live database.** The full flow (search → detail →
@@ -380,7 +379,7 @@ that every automated test had missed — an `EnableRetryOnFailure`/
 manual-transaction conflict that made every reservation fail with a 500,
 and a `size`+`availability` filter combination bug — both fixed and now
 covered by tests. Full story in
-[`deliverables/AI_USAGE.md`](deliverables/AI_USAGE.md#4-live-postgres-verification--and-two-real-bugs-it-caught).
+[`deliverables/TESTING.md`](deliverables/TESTING.md#verified-against-a-live-database).
 
 Not yet done: `EXPLAIN ANALYZE` against a realistic data volume (the seed
 data is only a handful of rows per locker).
@@ -443,7 +442,7 @@ turn-by-turn chat — most of the implementation was self-directed by the AI
 through sub-goals, with the human reviewing results and steering at
 decision points rather than dictating every step.
 
-Full breakdown across four documents:
+Full breakdown across three documents:
 
 - [`deliverables/AI-PROMPTS.md`](deliverables/AI-PROMPTS.md) — the actual
   prompt sequence used, and the goal behind each one.
@@ -459,9 +458,6 @@ Full breakdown across four documents:
   idempotency key is fixed when the page opens while the booking details
   stay editable, so retrying after a lost response returns the original
   reservation instead of the one the user just asked for.
-- [`deliverables/AI_USAGE.md`](deliverables/AI_USAGE.md) — the original
-  write-up, including the AI's **self**-review of a different section (the
-  reservation transaction internals) and the live-Postgres verification pass.
 
 Worth calling out here specifically: two real, non-staged incidents came
 out of this process rather than being hidden —
@@ -469,13 +465,13 @@ out of this process rather than being hidden —
 - A concurrency test that initially **passed for the wrong reason** (the
   fake it raced against resolved synchronously, so nothing was actually
   racing) — caught by deliberately disabling the fix and confirming the
-  test still passed, which it shouldn't have. Full story:
-  [`deliverables/DEBUGGING.md`](deliverables/DEBUGGING.md).
+  test still passed, which it shouldn't have.
 - Two **real bugs found only once a live Postgres instance became
   available** mid-project — every automated test, including the
   integration suite, had missed both, because the InMemory test provider
-  doesn't implement the code paths involved. Full story:
-  [`deliverables/AI_USAGE.md`](deliverables/AI_USAGE.md#4-live-postgres-verification--and-two-real-bugs-it-caught).
+  doesn't implement the code paths involved.
+
+Both are documented in [`deliverables/TESTING.md`](deliverables/TESTING.md).
 
 ---
 
@@ -483,27 +479,34 @@ out of this process rather than being hidden —
 
 ```mermaid
 flowchart TD
-    subgraph loop["Per feature / bug"]
-        A([Issue]) --> B["Branch off develop<br/>SPxxx/feature-or-bug/detail"]
-        B --> C[AI-assisted Coding]
-        C --> D["Test<br/>dotnet test / npm build + lint"]
-        D --> E[Commit]
-        E --> F[Push branch]
-        F --> G["Open PR into develop"]
-        G --> H{CI passes?}
-        H -- No --> C
-        H -- Yes --> I[Review]
-        I --> J[Merge into develop]
-    end
+    A([Issue]) --> B["Branch off develop<br/>SPxxx/feature-or-bug/detail"]
+    B --> C[AI-assisted Coding]
+    C --> D["Test<br/>dotnet test / npm build + lint"]
+    D --> E[Commit]
+    E --> F[Push branch]
+    F --> G[Open PR into develop]
+    G --> H{CI passes?}
+    H -- No --> C
+    H -- Yes --> I[Code Review]
+    I --> J[Merge into develop]
+    J --> K["Open PR<br/>develop → master"]
+    K --> L{CI passes?}
+    L -- No --> C
+    L -- Yes --> M[Merge into master]
+    M --> N([Auto build + deploy])
 
-    J --> K(["develop accumulates<br/>a release worth of work"])
-    K --> L["Test + review develop"]
-    L --> M["Open PR<br/>develop → master"]
-    M --> N{CI passes?}
-    N -- No --> K
-    N -- Yes --> O[Merge into master]
-    O --> P(["Auto build + deploy"])
+    classDef start fill:#8250df,stroke:#6639ba,color:#ffffff
+    classDef work fill:#1f6feb,stroke:#1158c7,color:#ffffff
+    classDef check fill:#238636,stroke:#1a7f37,color:#ffffff
+    classDef gate fill:#9a6700,stroke:#7d4e00,color:#ffffff
+
+    class A,N start
+    class B,C,E,F,G,K work
+    class D,I,J,M check
+    class H,L gate
 ```
+
+🟣 จุดเริ่ม/จุดจบ 　　 🔵 ลงมือทำ 　　 🟢 ตรวจ/รวมงาน 　　 🟡 ประตูที่ต้องผ่าน (CI)
 
 Two long-lived branches:
 
