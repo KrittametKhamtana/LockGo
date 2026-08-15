@@ -1,5 +1,5 @@
 # Base stack — no domain required. Lives on the server at /opt/lockgo/
-# (see docs/DEPLOYMENT.md), alongside a real .env (copy .env.example → .env
+# (see deliverables/DEPLOYMENT.md), alongside a real .env (copy .env.example → .env
 # and fill in real secrets — never committed).
 #
 # `docker compose pull && docker compose up -d` is exactly what the GitHub
@@ -9,7 +9,7 @@
 # app is reachable from day one without needing DNS set up first.
 #
 # Once a real domain is ready, switch to running docker-compose.domain.yml
-# instead (see docs/DEPLOYMENT.md's "Upgrading to domain mode") to add a
+# instead (see deliverables/DEPLOYMENT.md's "Upgrading to domain mode") to add a
 # Caddy reverse proxy with automatic TLS — this file doesn't change either
 # way, you just pick which one you run.
 

@@ -43,7 +43,7 @@ deliverable.
 This is the one place the spec asked for more than "write code that looks
 right" — section 10 explicitly asks for a test that *proves* the
 double-click guarantee. Writing that test properly (see
-[`docs/DEBUGGING.md`](DEBUGGING.md)) surfaced a real bug: the first version
+[`deliverables/DEBUGGING.md`](DEBUGGING.md)) surfaced a real bug: the first version
 of the fix passed a concurrency test that wasn't actually concurrent, and
 once the test was corrected to force a genuine race, it caught a case where
 a double-click's second request could get a false `409` instead of the
@@ -94,7 +94,7 @@ correctness requirement beyond "returns the right JSON."
 
 | Aspect | Finding | Fix applied |
 |---|---|---|
-| **Correctness** | Overlap check could return a false conflict for a request racing its own idempotency-key replay (see `docs/DEBUGGING.md`). | Re-check `idempotencyKey` before throwing `NO_AVAILABILITY`; return the winning replay instead. |
+| **Correctness** | Overlap check could return a false conflict for a request racing its own idempotency-key replay (see `deliverables/DEBUGGING.md`). | Re-check `idempotencyKey` before throwing `NO_AVAILABILITY`; return the winning replay instead. |
 | **Correctness** | `DbUpdateConcurrencyException` (from a genuine two-different-requests race on the same compartment) is a subtype of `DbUpdateException`; if the idempotency-key-unique-violation catch clause were written first without a type-specific guard, it could accidentally swallow a concurrency exception meant for a different code path. | `EfUnitOfWork` catches `DbUpdateConcurrencyException` in its own clause, ordered before the more general `DbUpdateException` filter, so each failure mode maps to the right error code. |
 | **Security** | `BookingNumberGenerator` originally reached for `System.Random`-style generation. Booking numbers are shown to users but aren't used as secrets or lookup keys anywhere sensitive, so predictability isn't a real vulnerability here — but there's no cost to doing it right. | Uses `RandomNumberGenerator.GetInt32` (cryptographically strong) instead of a non-cryptographic PRNG, and excludes visually-ambiguous characters (`0`/`O`, `1`/`I`). |
 | **Performance** | The overlap query filters `CompartmentId + Status + StartTime + EndTime` — without a matching index this is a sequential scan on every booking attempt, which matters on a CPU-limited free-tier server. | Composite index `(compartment_id, status, start_time, end_time)` added in `ReservationConfiguration`. Confirmed against the live Neon instance that queries and reservation writes succeed; `EXPLAIN ANALYZE` against a realistic data volume (this seed data is only a handful of rows) still hasn't been run and is worth doing before real load. |
@@ -121,7 +121,7 @@ InMemory-backed integration tests — had missed:
    endpoint. **Fixed** by wrapping the transaction in
    `CreateExecutionStrategy().ExecuteAsync(...)` — safe to retry as a whole
    unit specifically because `CreateInTransactionAsync` is already
-   idempotent (see `docs/DEBUGGING.md`).
+   idempotent (see `deliverables/DEBUGGING.md`).
 
 2. **`size` + `availability` combined incorrectly.** `LockerRepository.SearchAsync`
    checked `Compartments.Any(c => c.Size == size)` and
@@ -154,7 +154,7 @@ database and confirming they returned the identical reservation.
 that a concurrency/infrastructure bug survived a fully-passing test suite
 because the test double (EF Core `InMemory`) doesn't implement the same
 code paths as the real provider. The `RacyReservationRepository` fake in
-`docs/DEBUGGING.md` was a deliberate, deterministic substitute for exactly
+`deliverables/DEBUGGING.md` was a deliberate, deterministic substitute for exactly
 this reason; the execution-strategy bug here is the opposite lesson —
 sometimes there's no substitute for running against the real thing at least
 once.

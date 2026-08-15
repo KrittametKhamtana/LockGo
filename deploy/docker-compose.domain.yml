@@ -1,5 +1,5 @@
 # Domain mode — use once a real domain (e.g. two DuckDNS names, see
-# docs/DEPLOYMENT.md) is pointed at this server. A full alternate compose
+# deliverables/DEPLOYMENT.md) is pointed at this server. A full alternate compose
 # file rather than an override layered on docker-compose.yml, because
 # Compose merges list fields like `ports` across -f files instead of
 # letting an override remove them — simplest to just keep the two modes
