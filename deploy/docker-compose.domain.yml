@@ -16,14 +16,14 @@
 
 services:
   api:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-YOUR_GITHUB_USERNAME}/lockgo-api:latest
+    image: ghcr.io/krittametkhamtana/lockgo-api:latest
     restart: unless-stopped
     env_file: .env
     expose:
       - "8080"
 
   ui:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-YOUR_GITHUB_USERNAME}/lockgo-ui:latest
+    image: ghcr.io/krittametkhamtana/lockgo-ui:latest
     restart: unless-stopped
     expose:
       - "80"

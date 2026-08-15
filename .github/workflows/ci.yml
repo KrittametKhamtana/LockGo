@@ -75,6 +75,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Docker image references must be all-lowercase, but GitHub usernames/
+      # orgs can be mixed-case (this repo's owner is "KrittametKhamtana") —
+      # ghcr.io/${{ github.repository_owner }}/... fails with "invalid
+      # reference format" otherwise. Lowercase it once, reuse everywhere.
+      - name: Lowercase image owner
+        id: owner
+        run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
       - name: Build & push API image
         uses: docker/build-push-action@v6
         with:
@@ -82,8 +90,8 @@ jobs:
           file: LockGo.Api/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/lockgo-api:latest
-            ghcr.io/${{ github.repository_owner }}/lockgo-api:${{ github.sha }}
+            ghcr.io/${{ steps.owner.outputs.name }}/lockgo-api:latest
+            ghcr.io/${{ steps.owner.outputs.name }}/lockgo-api:${{ github.sha }}
 
       - name: Build & push UI image
         uses: docker/build-push-action@v6
@@ -98,8 +106,8 @@ jobs:
           build-args: |
             VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/lockgo-ui:latest
-            ghcr.io/${{ github.repository_owner }}/lockgo-ui:${{ github.sha }}
+            ghcr.io/${{ steps.owner.outputs.name }}/lockgo-ui:latest
+            ghcr.io/${{ steps.owner.outputs.name }}/lockgo-ui:${{ github.sha }}
 
   deploy:
     name: Deploy to server
