@@ -33,8 +33,8 @@ concurrency-critical reservation path), [`DATABASE.md`](deliverables/DATABASE.md
 [`AI-WORKFLOW.md`](deliverables/AI-WORKFLOW.md) (the build process as a
 diagram), [`AI-PROMPTS.md`](deliverables/AI-PROMPTS.md) (the prompts used
 to drive the build, and the goal behind each),
-[`AI-CODE-REVIEW.md`](deliverables/AI-CODE-REVIEW.md) (a human review of
-the AI-written booking flow — in Thai),
+[`AI-CODE-REVIEW.md`](deliverables/AI-CODE-REVIEW.md) (a review of the
+AI-written booking flow — in Thai),
 [`DEBUGGING.md`](deliverables/DEBUGGING.md) (a real race
 condition found and fixed while writing the concurrency tests),
 [`DEPLOYMENT.md`](deliverables/DEPLOYMENT.md) (Docker images, GitHub
@@ -453,12 +453,12 @@ Full breakdown across four documents:
   (concrete architecture, the specific EF Core mechanics for an API that
   changed underneath the spec's description, the whole test suite's design).
 - [`deliverables/AI-CODE-REVIEW.md`](deliverables/AI-CODE-REVIEW.md) — a
-  **human** review of AI-written code (in Thai), tracing the booking flow
-  from screen to service against correctness / bugs / security /
-  performance / maintainability. It found a bug the 60-test suite can't
-  catch: the idempotency key is fixed when the page opens while the booking
-  details stay editable, so a retry after a lost response can silently
-  return a reservation the user didn't ask for.
+  review of AI-written code (in Thai), tracing the booking flow from screen
+  to service against correctness / bugs / security / performance /
+  maintainability. It reports a bug the 60-test suite can't catch: the
+  idempotency key is fixed when the page opens while the booking details
+  stay editable, so retrying after a lost response returns the original
+  reservation instead of the one the user just asked for.
 - [`deliverables/AI_USAGE.md`](deliverables/AI_USAGE.md) — the original
   write-up, including the AI's **self**-review of a different section (the
   reservation transaction internals) and the live-Postgres verification pass.

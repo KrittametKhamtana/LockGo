@@ -15,21 +15,20 @@ Review).
 | Architecture Diagram | ✅ | [`ARCHITECTURE.md`](ARCHITECTURE.md) (current structure) |
 | AI Workflow | ✅ | [`AI-WORKFLOW.md`](AI-WORKFLOW.md) |
 | AI Prompt | ✅ | [`AI-PROMPTS.md`](AI-PROMPTS.md) (the prompt sequence used, with the goal behind each one) |
-| AI Generated Code Review | ✅ | [`AI-CODE-REVIEW.md`](AI-CODE-REVIEW.md) (human review of the AI-written booking flow, UI → Service) |
+| AI Generated Code Review | ✅ | [`AI-CODE-REVIEW.md`](AI-CODE-REVIEW.md) (review of the AI-written booking flow, UI → Service) |
 
-## How the two AI-review documents differ
+## How the two code-review documents differ
 
 Both exist on purpose and cover different code:
 
-- [`AI-CODE-REVIEW.md`](AI-CODE-REVIEW.md) — **a human reviewing the AI's
-  code**, written in Thai. Covers the booking flow from the screen down to
-  the service (`ReservationPage` → `useCreateReservation` → API →
-  `ReservationService.CreateAsync`), checked against all five required
-  points: correctness, bugs, security, performance, maintainability. Found
-  a real bug the 60-test suite can't catch.
-- [`AI_USAGE.md`](AI_USAGE.md) §3 — **the AI reviewing its own code**,
-  covering a different section: the internals of the reservation
-  transaction (`CreateInTransactionAsync` + `EfUnitOfWork`).
+- [`AI-CODE-REVIEW.md`](AI-CODE-REVIEW.md) — written in Thai, covering the
+  booking flow from the screen down to the service (`ReservationPage` →
+  `useCreateReservation` → API → `ReservationService.CreateAsync`) against
+  correctness/bugs, security, performance, and maintainability. Reports a
+  bug the 60-test suite can't catch, with the before/after code.
+- [`AI_USAGE.md`](AI_USAGE.md) §3 — covers a different section: the
+  internals of the reservation transaction (`CreateInTransactionAsync` +
+  `EfUnitOfWork`).
 
 ## Everything else in this folder
 
