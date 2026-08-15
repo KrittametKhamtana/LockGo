@@ -8,9 +8,10 @@
 # http://<server-ip>:8081 with no TLS. That's a deliberate default so the
 # app is reachable from day one without needing DNS set up first.
 #
-# Once a real domain is ready, layer docker-compose.caddy.yml on top (see
-# that file's header comment) to add a reverse proxy with automatic TLS —
-# nothing here needs to change to make that switch.
+# Once a real domain is ready, switch to running docker-compose.domain.yml
+# instead (see docs/DEPLOYMENT.md's "Upgrading to domain mode") to add a
+# Caddy reverse proxy with automatic TLS — this file doesn't change either
+# way, you just pick which one you run.
 
 services:
   api:
