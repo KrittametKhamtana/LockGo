@@ -455,13 +455,59 @@ out of this process rather than being hidden —
 
 ## Git workflow
 
-This repo is set up for: `Issue → Branch → Dev → AI-assisted coding → Test
-→ Commit → PR → Review → Merge`. In practice for this assessment: one
-continuous AI-assisted build session (see [§10](#10-ai-tools-ที่ใช้)),
-verified with `dotnet test`/`npm run build`/`npm run lint` before each
-commit, on `master` (this repo's actual default branch). For follow-on
-work, branch per feature/fix (`feature/...`, `fix/...`), open a PR against
-`master`, and let the CI workflow (`.github/workflows/ci.yml`) gate the
-merge — every push to `master` that passes both test jobs also builds and
-deploys automatically (see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)), so
-merging to `master` is a real release, not just a commit.
+```mermaid
+flowchart TD
+    subgraph loop["Per feature / bug"]
+        A([Issue]) --> B["Branch off develop<br/>SPxxx/feature-or-bug/detail"]
+        B --> C[AI-assisted Coding]
+        C --> D["Test<br/>dotnet test / npm build + lint"]
+        D --> E[Commit]
+        E --> F[Push branch]
+        F --> G["Open PR into develop"]
+        G --> H{CI passes?}
+        H -- No --> C
+        H -- Yes --> I[Review]
+        I --> J[Merge into develop]
+    end
+
+    J --> K(["develop accumulates<br/>a release worth of work"])
+    K --> L["Test + review develop"]
+    L --> M["Open PR<br/>develop → master"]
+    M --> N{CI passes?}
+    N -- No --> K
+    N -- Yes --> O[Merge into master]
+    O --> P(["Auto build + deploy"])
+```
+
+Two long-lived branches:
+
+- **`develop`** — the default branch (what a fresh clone/PR points to).
+  Day-to-day work lands here first.
+- **`master`** — the release branch. Every push here builds both Docker
+  images and deploys them automatically (see
+  [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)) — merging to `master` is a
+  real release, not just a commit.
+
+**Flow for a unit of work:**
+
+1. Branch off `develop`, named `SP<sprintNumber>/<feature|bug>/<short-detail>`
+   (e.g. `SP003/feature/advance-booking`, `SP003/bug/reservation-timeout`).
+2. Push the branch and open a PR into `develop`. CI
+   (`.github/workflows/ci.yml`) runs the backend + frontend test jobs on
+   the PR — merge once it's green and reviewed.
+3. Once `develop` has accumulated a release's worth of work and has been
+   tested, open a PR from `develop` into `master`. CI runs again on that
+   PR; merging it triggers the real deploy.
+
+**No separate staging server**: `develop` only ever runs the test jobs
+(build, lint, `dotnet test`) — the `build-and-push`/`deploy` jobs are
+gated to `github.ref == 'refs/heads/master' && github.event_name ==
+'push'`, so pushing or merging into `develop` never builds images or
+touches the VM. One server, serving `master` only; promote to a real
+staging environment later if the team/infra grows.
+
+This project's actual history predates this model — it started as one
+continuous AI-assisted build session on `master` directly (see
+[§10](#10-ai-tools-ที่ใช้)), verified with `dotnet test`/`npm run
+build`/`npm run lint` before each commit. The two-branch flow above is
+what's used from here on.
