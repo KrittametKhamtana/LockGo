@@ -1,3 +1,4 @@
+using LockGo.Application.Common;
 using LockGo.Application.DTOs;
 using LockGo.Application.Interfaces;
 using LockGo.Domain.Entities;
@@ -18,16 +19,21 @@ public class LockerRepository : ILockerRepository
 
     public async Task<IReadOnlyList<Locker>> SearchAsync(LockerSearchQuery query, CancellationToken ct)
     {
-        var now = DateTimeOffset.UtcNow;
+        var window = BookingWindow.From(query.StartTime, query.DurationHours);
+        var windowStart = window.Start;
+        var windowEnd = window.End;
 
         var lockers = _db.Lockers
             .AsNoTracking()
             .Include(l => l.Compartments)
-                // Only active, unexpired reservations are loaded — LockerService
-                // derives per-size availability from these rather than from the
-                // denormalized Compartment.Status column, so the list agrees with
-                // what the booking path will actually allow.
-                .ThenInclude(c => c.Reservations.Where(r => r.Status == ReservationStatus.Active && r.EndTime > now))
+                // Only reservations overlapping the requested window are loaded —
+                // LockerService derives per-size availability from these rather
+                // than from the denormalized Compartment.Status column, so the
+                // list agrees with what the booking path will actually allow.
+                .ThenInclude(c => c.Reservations.Where(r =>
+                    r.Status == ReservationStatus.Active &&
+                    r.StartTime < windowEnd &&
+                    r.EndTime > windowStart))
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(query.Search))
@@ -51,9 +57,12 @@ public class LockerRepository : ILockerRepository
         // size. Availability is evaluated against live reservations here too.
         if (hasSizeFilter && availableOnly)
         {
-            lockers = lockers.Where(l => l.Compartments.Any(c =>
+            lockers = lockers.Where(l => l.OperatingStatus == OperatingStatus.Open && l.Compartments.Any(c =>
                 c.Size == size &&
-                !c.Reservations.Any(r => r.Status == ReservationStatus.Active && r.EndTime > now)));
+                !c.Reservations.Any(r =>
+                    r.Status == ReservationStatus.Active &&
+                    r.StartTime < windowEnd &&
+                    r.EndTime > windowStart)));
         }
         else if (hasSizeFilter)
         {
@@ -61,8 +70,14 @@ public class LockerRepository : ILockerRepository
         }
         else if (availableOnly)
         {
-            lockers = lockers.Where(l => l.Compartments.Any(c =>
-                !c.Reservations.Any(r => r.Status == ReservationStatus.Active && r.EndTime > now)));
+            // A locker whose site is Closed can't actually be booked, even if
+            // its compartments individually look free — "available only" must
+            // exclude it, not just fully-booked lockers.
+            lockers = lockers.Where(l => l.OperatingStatus == OperatingStatus.Open && l.Compartments.Any(c =>
+                !c.Reservations.Any(r =>
+                    r.Status == ReservationStatus.Active &&
+                    r.StartTime < windowEnd &&
+                    r.EndTime > windowStart)));
         }
 
         // Distance filtering can't be pushed down as SQL (Haversine over two runtime
@@ -70,14 +85,18 @@ public class LockerRepository : ILockerRepository
         return await lockers.ToListAsync(ct);
     }
 
-    public async Task<Locker?> GetByIdAsync(Guid id, CancellationToken ct)
+    public async Task<Locker?> GetByIdAsync(Guid id, BookingWindow window, CancellationToken ct)
     {
-        var now = DateTimeOffset.UtcNow;
+        var windowStart = window.Start;
+        var windowEnd = window.End;
 
         return await _db.Lockers
             .AsNoTracking()
             .Include(l => l.Compartments)
-                .ThenInclude(c => c.Reservations.Where(r => r.Status == ReservationStatus.Active && r.EndTime > now))
+                .ThenInclude(c => c.Reservations.Where(r =>
+                    r.Status == ReservationStatus.Active &&
+                    r.StartTime < windowEnd &&
+                    r.EndTime > windowStart))
             .FirstOrDefaultAsync(l => l.Id == id, ct);
     }
 }

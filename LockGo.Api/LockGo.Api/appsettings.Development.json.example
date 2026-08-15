@@ -13,5 +13,8 @@
     "Password": "CHANGE_ME",
     "MaximumPoolSize": 10,
     "SslMode": "Require"
+  },
+  "Jwt": {
+    "Secret": "CHANGE_ME_TO_A_LONG_RANDOM_VALUE_AT_LEAST_32_BYTES"
   }
 }

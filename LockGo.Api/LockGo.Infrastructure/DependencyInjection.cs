@@ -1,6 +1,7 @@
 using LockGo.Application.Interfaces;
 using LockGo.Infrastructure.Persistence;
 using LockGo.Infrastructure.Repositories;
+using LockGo.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,7 +45,7 @@ public static class DependencyInjection
                 })
                 .UseSnakeCaseNamingConvention());
 
-        return services.AddRepositories();
+        return services.AddRepositories().AddJwtAuth(configuration);
     }
 
     /// <summary>
@@ -57,7 +58,22 @@ public static class DependencyInjection
         services.AddScoped<ILockerRepository, LockerRepository>();
         services.AddScoped<ICompartmentRepository, CompartmentRepository>();
         services.AddScoped<IReservationRepository, ReservationRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Separate from AddRepositories so the Testing pipeline (which calls
+    /// AddRepositories directly, without AddInfrastructure) can wire this up
+    /// too — auth needs to work under the InMemory test DB the same as it
+    /// does against Postgres.
+    /// </summary>
+    public static IServiceCollection AddJwtAuth(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+        services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
 
         return services;
     }

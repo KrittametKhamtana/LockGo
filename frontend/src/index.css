@@ -4,6 +4,16 @@ body,
   height: 100%;
 }
 
+html {
+  /* Forces the vertical scrollbar's track to always render, even on pages
+     short enough not to need it, so content doesn't shift sideways when
+     navigating between a short page and a tall one. Deliberately NOT
+     scrollbar-gutter:stable — that reserves the same width but leaves it
+     blank with no scrollbar drawn, which reads as an unexplained gap on the
+     right edge instead of as a scrollbar. */
+  overflow-y: scroll;
+}
+
 body {
   margin: 0;
 }

@@ -39,6 +39,15 @@ export interface LockerSearchParams {
   size?: CompartmentSize;
   availability?: boolean;
   search?: string;
+  /** ISO 8601; omit for "right now". Availability is reported for this window. */
+  startTime?: string;
+  durationHours?: number;
+}
+
+/** The slot availability is reported for. Empty startTime means "right now". */
+export interface BookingWindowParams {
+  startTime?: string;
+  durationHours?: number;
 }
 
 export const SIZE_LABEL: Record<CompartmentSize, string> = {

@@ -1,17 +1,12 @@
 import { useState } from "react";
 import { Alert, CircularProgress, Stack, Typography } from "@mui/material";
-import { FilterBar, type Filters } from "../components/FilterBar";
+import { FilterBar } from "../components/FilterBar";
 import { LockerCard } from "../components/LockerCard";
 import { useLockers } from "../hooks/useLockers";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
-
-const DEFAULT_FILTERS: Filters = {
-  search: "",
-  location: "",
-  distanceKm: 10,
-  size: "",
-  availableOnly: false,
-};
+import { parseLocalInputValue } from "../utils/booking";
+import { DEFAULT_FILTERS, type Filters } from "../types/filters";
+import type { BookingWindowParams } from "../types/locker";
 
 export function FindLockerPage() {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
@@ -21,13 +16,28 @@ export function FindLockerPage() {
   // Avoids a request per keystroke while typing in the search box.
   const debouncedSearch = useDebouncedValue(filters.search, 300);
 
+  const windowStart = parseLocalInputValue(filters.startTime);
+  const bookingWindow: BookingWindowParams = windowStart
+    ? { startTime: windowStart.toISOString(), durationHours: filters.durationHours }
+    : {};
+
   const { data: lockers, isLoading, isError } = useLockers({
     search: debouncedSearch,
     location: filters.location,
     distance: filters.location ? filters.distanceKm : undefined,
     size: filters.size || undefined,
     availability: filters.availableOnly || undefined,
+    ...bookingWindow,
   });
+
+  // Carried into the detail page so it reports availability for the same slot
+  // the list just promised — and survives a refresh or a shared link.
+  const windowQuery = bookingWindow.startTime
+    ? `?${new URLSearchParams({
+        startTime: bookingWindow.startTime,
+        durationHours: String(bookingWindow.durationHours),
+      })}`
+    : "";
 
   function handleToggleLocation() {
     // Toggling off just clears the coordinates — distance filtering and sorting
@@ -61,6 +71,11 @@ export function FindLockerPage() {
     );
   }
 
+  function handleResetFilters() {
+    setFilters(DEFAULT_FILTERS);
+    setLocationError(null);
+  }
+
   return (
     <Stack spacing={3}>
       <div>
@@ -74,6 +89,7 @@ export function FindLockerPage() {
         filters={filters}
         onChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
         onToggleLocation={handleToggleLocation}
+        onReset={handleResetFilters}
         locating={locating}
       />
 
@@ -93,7 +109,7 @@ export function FindLockerPage() {
 
       <Stack spacing={2}>
         {lockers?.map((locker) => (
-          <LockerCard key={locker.id} locker={locker} />
+          <LockerCard key={locker.id} locker={locker} windowQuery={windowQuery} />
         ))}
       </Stack>
     </Stack>

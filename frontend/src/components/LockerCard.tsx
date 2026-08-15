@@ -6,6 +6,8 @@ import type { LockerListItem } from "../types/locker";
 
 interface LockerCardProps {
   locker: LockerListItem;
+  /** Pre-built "?startTime=…&durationHours=…", or "" when browsing for now. */
+  windowQuery: string;
 }
 
 /**
@@ -24,13 +26,13 @@ function statusChip(locker: LockerListItem) {
   return { label: "Open", color: "success" as const, variant: "filled" as const };
 }
 
-export function LockerCard({ locker }: LockerCardProps) {
+export function LockerCard({ locker, windowQuery }: LockerCardProps) {
   const navigate = useNavigate();
   const status = statusChip(locker);
 
   return (
     <Card variant="outlined">
-      <CardActionArea onClick={() => navigate(`/lockers/${locker.id}`)} sx={{ p: 1 }}>
+      <CardActionArea onClick={() => navigate(`/lockers/${locker.id}${windowQuery}`)} sx={{ p: 1 }}>
         <CardContent>
           <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={2}>
             <Box>

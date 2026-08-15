@@ -28,7 +28,7 @@ public class DoubleClickConfirmTests
             new StubCompartmentRepository(repository, compartments.ToArray()),
             new PassthroughUnitOfWork());
 
-        var request = new CreateReservationRequest(locker.Id, "S", DurationHours: 2, IdempotencyKey: "double-click-key");
+        var request = new CreateReservationRequest(locker.Id, "S", DurationHours: 2, IdempotencyKey: "double-click-key", StartTime: DateTimeOffset.UtcNow);
 
         // Genuinely concurrent — not two sequential awaits. This is what
         // reproduces the race a fast double-click on Confirm creates.
@@ -54,7 +54,7 @@ public class DoubleClickConfirmTests
             new StubCompartmentRepository(repository, compartments.ToArray()),
             new PassthroughUnitOfWork());
 
-        var request = new CreateReservationRequest(locker.Id, "S", DurationHours: 2, IdempotencyKey: "hammered-key");
+        var request = new CreateReservationRequest(locker.Id, "S", DurationHours: 2, IdempotencyKey: "hammered-key", StartTime: DateTimeOffset.UtcNow);
 
         var tasks = Enumerable.Range(0, concurrentCallers).Select(_ => service.CreateAsync(request, CancellationToken.None));
         var results = await Task.WhenAll(tasks);
@@ -86,7 +86,7 @@ public class DoubleClickConfirmTests
             {
                 try
                 {
-                    var request = new CreateReservationRequest(locker.Id, "S", DurationHours: 2, IdempotencyKey: $"user-{i}");
+                    var request = new CreateReservationRequest(locker.Id, "S", DurationHours: 2, IdempotencyKey: $"user-{i}", StartTime: DateTimeOffset.UtcNow);
                     return (Reservation: await service.CreateAsync(request, CancellationToken.None), Conflict: false);
                 }
                 catch (ConflictException)

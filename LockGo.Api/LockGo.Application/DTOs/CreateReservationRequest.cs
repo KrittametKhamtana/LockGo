@@ -7,12 +7,13 @@ namespace LockGo.Application.DTOs;
 /// two users choosing "Small" concurrently get different compartments rather
 /// than colliding on one hardcoded ID.
 ///
-/// StartTime is always set server-side to the moment the reservation is
-/// confirmed (immediate-use locker booking) — the client only picks how long
-/// to hold the compartment for.
+/// StartTime is client-supplied (advance booking, not just immediate-use) —
+/// the server only checks it's a sane value (not in the past, not too far
+/// out) and uses it as-is for the availability-overlap check.
 /// </summary>
 public record CreateReservationRequest(
     Guid LockerId,
     string Size,
     int DurationHours,
-    string IdempotencyKey);
+    string IdempotencyKey,
+    DateTimeOffset StartTime);

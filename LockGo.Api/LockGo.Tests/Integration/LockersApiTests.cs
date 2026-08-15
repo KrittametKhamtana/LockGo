@@ -133,6 +133,114 @@ public class LockersApiTests : IClassFixture<LockGoWebApplicationFactory>, IAsyn
     }
 
     [Fact]
+    public async Task GetLockers_WhenEveryCompartmentIsBooked_ExcludedByAvailabilityFilter()
+    {
+        Guid lockerId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<LockGoDbContext>();
+            var locker = await db.Lockers
+                .Include(l => l.Compartments)
+                .FirstAsync(l => l.OperatingStatus == OperatingStatus.Open);
+            lockerId = locker.Id;
+
+            foreach (var compartment in locker.Compartments)
+            {
+                db.Reservations.Add(BuildActiveReservation(compartment.Id));
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        var lockers = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?availability=true");
+
+        lockers.Should().NotContain(l => l.Id == lockerId);
+    }
+
+    [Fact]
+    public async Task GetLockers_ClosedLockerWithFreeCompartments_ExcludedByAvailabilityFilter()
+    {
+        // Airport Hub and Silom Complex are seeded Closed with unreserved
+        // compartments — a locker can't be booked if the site itself is
+        // closed, so "available only" must not surface it just because its
+        // compartments individually look free.
+        var lockers = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?availability=true");
+
+        lockers.Should().OnlyContain(l => l.OperatingStatus == nameof(OperatingStatus.Open));
+    }
+
+    [Fact]
+    public async Task GetLockers_BookedOutNow_StillShowsAvailableForALaterWindow()
+    {
+        // The whole point of advance booking: "full" is a property of a time
+        // window, not of the locker. Booking every compartment for the next few
+        // hours must not hide the locker from someone searching for next week.
+        Guid lockerId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<LockGoDbContext>();
+            var locker = await db.Lockers
+                .Include(l => l.Compartments)
+                .FirstAsync(l => l.OperatingStatus == OperatingStatus.Open);
+            lockerId = locker.Id;
+
+            foreach (var compartment in locker.Compartments)
+            {
+                db.Reservations.Add(BuildActiveReservation(compartment.Id));
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        var now = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?availability=true");
+        var nextWeek = DateTimeOffset.UtcNow.AddDays(7).ToString("O");
+        var later = await _client.GetFromJsonAsync<List<LockerListItemDto>>(
+            $"/api/lockers?availability=true&startTime={Uri.EscapeDataString(nextWeek)}&durationHours=2");
+
+        now.Should().NotContain(l => l.Id == lockerId);
+        later.Should().Contain(l => l.Id == lockerId);
+    }
+
+    [Fact]
+    public async Task GetLockerById_ReportsAvailabilityForTheRequestedWindow_NotJustNow()
+    {
+        Guid lockerId;
+        var start = DateTimeOffset.UtcNow.AddDays(2);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<LockGoDbContext>();
+            // Tests in this class share one in-memory database, so pick a locker
+            // no earlier test has booked into — otherwise "free right now" is
+            // already false before this test does anything.
+            var locker = await db.Lockers
+                .Include(l => l.Compartments)
+                .FirstAsync(l => l.OperatingStatus == OperatingStatus.Open
+                              && l.Compartments.Any()
+                              && !l.Compartments.Any(c => c.Reservations.Any()));
+            lockerId = locker.Id;
+
+            // Booked for a window two days out — invisible to a "right now" query.
+            foreach (var compartment in locker.Compartments)
+            {
+                var reservation = BuildActiveReservation(compartment.Id);
+                reservation.StartTime = start;
+                reservation.EndTime = start.AddHours(4);
+                db.Reservations.Add(reservation);
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        var rightNow = await _client.GetFromJsonAsync<LockerDetailDto>($"/api/lockers/{lockerId}");
+        var thatWindow = await _client.GetFromJsonAsync<LockerDetailDto>(
+            $"/api/lockers/{lockerId}?startTime={Uri.EscapeDataString(start.ToString("O"))}&durationHours=2");
+
+        rightNow!.IsFullyBooked.Should().BeFalse();
+        thatWindow!.IsFullyBooked.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task GetLockerById_WhenLockerExists_ReturnsPerSizeAvailability()
     {
         var lockers = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers");

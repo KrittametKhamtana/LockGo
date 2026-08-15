@@ -24,7 +24,7 @@ public class ReservationsApiTests : IClassFixture<LockGoWebApplicationFactory>, 
     public async Task Create_ThenGetById_ReturnsTheSameReservation()
     {
         var (lockerId, size) = await GetLockerWithAvailableSizeAsync();
-        var request = new CreateReservationRequest(lockerId, size, DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString());
+        var request = new CreateReservationRequest(lockerId, size, DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
 
         var createResponse = await _client.PostAsJsonAsync("/api/reservations", request);
         createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -48,7 +48,7 @@ public class ReservationsApiTests : IClassFixture<LockGoWebApplicationFactory>, 
         var (lockerId, size) = await GetLockerWithAvailableSizeAsync(minAvailable: 2);
         var before = await GetSizeAvailabilityAsync(lockerId, size);
 
-        var request = new CreateReservationRequest(lockerId, size, DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString());
+        var request = new CreateReservationRequest(lockerId, size, DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
         await _client.PostAsJsonAsync("/api/reservations", request);
 
         var after = await GetSizeAvailabilityAsync(lockerId, size);
@@ -68,7 +68,7 @@ public class ReservationsApiTests : IClassFixture<LockGoWebApplicationFactory>, 
     [Fact]
     public async Task Create_ForNonexistentLocker_Returns404WithErrorShape()
     {
-        var request = new CreateReservationRequest(Guid.NewGuid(), "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString());
+        var request = new CreateReservationRequest(Guid.NewGuid(), "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
 
         var response = await _client.PostAsJsonAsync("/api/reservations", request);
 
@@ -85,7 +85,7 @@ public class ReservationsApiTests : IClassFixture<LockGoWebApplicationFactory>, 
         var riverside = lockers!.Single();
         riverside.SizeAvailability.Should().NotContain(s => s.Size == "L");
 
-        var request = new CreateReservationRequest(riverside.Id, "L", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString());
+        var request = new CreateReservationRequest(riverside.Id, "L", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
         var response = await _client.PostAsJsonAsync("/api/reservations", request);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -95,7 +95,7 @@ public class ReservationsApiTests : IClassFixture<LockGoWebApplicationFactory>, 
     public async Task Create_WithOutOfRangeDuration_Returns400WithErrorShape()
     {
         var (lockerId, size) = await GetLockerWithAvailableSizeAsync();
-        var request = new CreateReservationRequest(lockerId, size, DurationHours: 999, IdempotencyKey: Guid.NewGuid().ToString());
+        var request = new CreateReservationRequest(lockerId, size, DurationHours: 999, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
 
         var response = await _client.PostAsJsonAsync("/api/reservations", request);
 
@@ -109,7 +109,7 @@ public class ReservationsApiTests : IClassFixture<LockGoWebApplicationFactory>, 
     {
         var (lockerId, size) = await GetLockerWithAvailableSizeAsync(minAvailable: 2);
         var idempotencyKey = Guid.NewGuid().ToString();
-        var request = new CreateReservationRequest(lockerId, size, DurationHours: 2, idempotencyKey);
+        var request = new CreateReservationRequest(lockerId, size, DurationHours: 2, idempotencyKey, StartTime: DateTimeOffset.UtcNow);
 
         var first = await _client.PostAsJsonAsync("/api/reservations", request);
         var second = await _client.PostAsJsonAsync("/api/reservations", request);

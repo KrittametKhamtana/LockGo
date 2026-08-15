@@ -13,6 +13,16 @@ public class ReservationService : IReservationService
     private const int MaxDurationHours = 72;
 
     /// <summary>
+    /// Grace window for a StartTime that's already slightly in the past. An
+    /// "start now" booking carries the client's clock, so a few minutes of
+    /// skew (or the user sitting on the confirm screen) must not be rejected.
+    /// </summary>
+    private static readonly TimeSpan StartTimePastGrace = TimeSpan.FromMinutes(5);
+
+    /// <summary>How far ahead a compartment can be reserved.</summary>
+    private static readonly TimeSpan MaxAdvanceBooking = TimeSpan.FromDays(30);
+
+    /// <summary>
     /// How many times to re-pick a compartment after losing an optimistic-concurrency
     /// race. Each retry starts a fresh transaction and re-queries availability, so the
     /// only cost of exhausting these is falling back to a NO_AVAILABILITY conflict —
@@ -49,6 +59,18 @@ public class ReservationService : IReservationService
         if (!Enum.TryParse<CompartmentSize>(request.Size, ignoreCase: true, out var size))
         {
             throw new ValidationAppException($"Size must be one of: {string.Join(", ", Enum.GetNames<CompartmentSize>())}.");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+
+        if (request.StartTime < now - StartTimePastGrace)
+        {
+            throw new ValidationAppException("StartTime cannot be in the past.");
+        }
+
+        if (request.StartTime > now + MaxAdvanceBooking)
+        {
+            throw new ValidationAppException($"StartTime cannot be more than {MaxAdvanceBooking.TotalDays:0} days in the future.");
         }
 
         // Concurrent requests for the same size all pick the same first-free
@@ -99,7 +121,7 @@ public class ReservationService : IReservationService
             return MapToDto(existing);
         }
 
-        var startTime = DateTimeOffset.UtcNow;
+        var startTime = request.StartTime;
         var endTime = startTime.AddHours(request.DurationHours);
 
         // Picks a compartment of the requested size with no overlapping active

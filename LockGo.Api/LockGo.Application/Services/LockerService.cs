@@ -1,3 +1,4 @@
+using LockGo.Application.Common;
 using LockGo.Application.Common.Exceptions;
 using LockGo.Application.DTOs;
 using LockGo.Application.Interfaces;
@@ -19,6 +20,7 @@ public class LockerService : ILockerService
     {
         var lockers = await _lockerRepository.SearchAsync(query, ct);
 
+        var window = BookingWindow.From(query.StartTime, query.DurationHours);
         var hasOrigin = query.Lat.HasValue && query.Lng.HasValue;
         var hasSizeFilter = Enum.TryParse<CompartmentSize>(query.Size, ignoreCase: true, out var sizeFilter);
 
@@ -28,7 +30,7 @@ public class LockerService : ILockerService
                 ? HaversineDistanceKm(query.Lat!.Value, query.Lng!.Value, locker.Lat, locker.Lng)
                 : (double?)null;
 
-            var sizeAvailability = BuildSizeAvailability(locker);
+            var sizeAvailability = BuildSizeAvailability(locker, window);
 
             // When a size filter is active, price/count headline figures describe
             // only that size — otherwise a "Small" search would show the locker's
@@ -61,12 +63,12 @@ public class LockerService : ILockerService
             : items.ToList();
     }
 
-    public async Task<LockerDetailDto> GetByIdAsync(Guid id, CancellationToken ct)
+    public async Task<LockerDetailDto> GetByIdAsync(Guid id, BookingWindow window, CancellationToken ct)
     {
-        var locker = await _lockerRepository.GetByIdAsync(id, ct)
+        var locker = await _lockerRepository.GetByIdAsync(id, window, ct)
             ?? throw new NotFoundException("LOCKER_NOT_FOUND", $"Locker '{id}' was not found.");
 
-        var sizeAvailability = BuildSizeAvailability(locker);
+        var sizeAvailability = BuildSizeAvailability(locker, window);
 
         return new LockerDetailDto(
             locker.Id,
@@ -88,23 +90,28 @@ public class LockerService : ILockerService
     /// Sizes with no compartments at all are omitted, which is what lets the UI
     /// show that a location simply doesn't offer Large.
     /// </summary>
-    private static List<CompartmentSizeAvailabilityDto> BuildSizeAvailability(Locker locker)
+    private static List<CompartmentSizeAvailabilityDto> BuildSizeAvailability(Locker locker, BookingWindow window)
     {
-        var now = DateTimeOffset.UtcNow;
-
         return locker.Compartments
             .GroupBy(c => c.Size)
             .OrderBy(g => g.Key)
             .Select(group => new CompartmentSizeAvailabilityDto(
                 group.Key.ToString(),
                 group.Min(c => c.Price),
-                group.Count(c => !HasActiveReservation(c, now)),
+                group.Count(c => !IsReservedDuring(c, window)),
                 group.Count()))
             .ToList();
     }
 
-    private static bool HasActiveReservation(Compartment compartment, DateTimeOffset now) =>
-        compartment.Reservations.Any(r => r.Status == ReservationStatus.Active && r.EndTime > now);
+    /// <summary>
+    /// Same overlap test the booking path uses, so what the list promises and
+    /// what a confirm will accept can't drift apart.
+    /// </summary>
+    private static bool IsReservedDuring(Compartment compartment, BookingWindow window) =>
+        compartment.Reservations.Any(r =>
+            r.Status == ReservationStatus.Active &&
+            r.StartTime < window.End &&
+            r.EndTime > window.Start);
 
     /// <summary>Great-circle distance in km — real math, but the input coordinates are manually supplied (no device GPS/geocoding in this scope).</summary>
     private static double HaversineDistanceKm(double lat1, double lng1, double lat2, double lng2)

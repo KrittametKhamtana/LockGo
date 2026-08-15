@@ -39,7 +39,7 @@ public class ReservationServiceTests
             .Setup(r => r.FindAvailableAsync(locker.Id, CompartmentSize.M, It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(compartment);
 
-        var request = new CreateReservationRequest(locker.Id, "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString());
+        var request = new CreateReservationRequest(locker.Id, "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
 
         var result = await _sut.CreateAsync(request, CancellationToken.None);
 
@@ -62,7 +62,7 @@ public class ReservationServiceTests
             .Setup(r => r.ExistsForSizeAsync(locker.Id, CompartmentSize.M, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var request = new CreateReservationRequest(locker.Id, "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString());
+        var request = new CreateReservationRequest(locker.Id, "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
 
         var ex = await Assert.ThrowsAsync<ConflictException>(() => _sut.CreateAsync(request, CancellationToken.None));
         ex.Code.Should().Be("NO_AVAILABILITY");
@@ -80,7 +80,7 @@ public class ReservationServiceTests
             .Setup(r => r.ExistsForSizeAsync(It.IsAny<Guid>(), It.IsAny<CompartmentSize>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
-        var request = new CreateReservationRequest(locker.Id, "L", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString());
+        var request = new CreateReservationRequest(locker.Id, "L", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
 
         var ex = await Assert.ThrowsAsync<NotFoundException>(() => _sut.CreateAsync(request, CancellationToken.None));
         ex.Code.Should().Be("COMPARTMENT_NOT_FOUND");
@@ -102,7 +102,7 @@ public class ReservationServiceTests
             .ReturnsAsync(wonByReplay);       // re-check after "no availability": now it has
         NoAvailableCompartment();
 
-        var request = new CreateReservationRequest(locker.Id, "M", DurationHours: 2, IdempotencyKey: "raced-key");
+        var request = new CreateReservationRequest(locker.Id, "M", DurationHours: 2, IdempotencyKey: "raced-key", StartTime: DateTimeOffset.UtcNow);
 
         var result = await _sut.CreateAsync(request, CancellationToken.None);
 
@@ -122,7 +122,7 @@ public class ReservationServiceTests
             .Setup(r => r.FindAvailableAsync(locker.Id, CompartmentSize.M, It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(compartment);
 
-        var request = new CreateReservationRequest(locker.Id, "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString());
+        var request = new CreateReservationRequest(locker.Id, "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
 
         var ex = await Assert.ThrowsAsync<ConflictException>(() => _sut.CreateAsync(request, CancellationToken.None));
         ex.Code.Should().Be("LOCKER_CLOSED");
@@ -133,7 +133,72 @@ public class ReservationServiceTests
     [InlineData(73)]
     public async Task CreateAsync_WhenDurationOutOfRange_ThrowsValidation(int durationHours)
     {
-        var request = new CreateReservationRequest(Guid.NewGuid(), "M", durationHours, Guid.NewGuid().ToString());
+        var request = new CreateReservationRequest(Guid.NewGuid(), "M", durationHours, Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
+
+        await Assert.ThrowsAsync<ValidationAppException>(() => _sut.CreateAsync(request, CancellationToken.None));
+
+        _reservationRepository.Verify(r => r.GetByIdempotencyKeyAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateAsync_UsesClientSuppliedStartTime_ForBothTheAvailabilityWindowAndTheSavedReservation()
+    {
+        var locker = EntityFixtures.OpenLocker();
+        var compartment = EntityFixtures.AvailableCompartment(locker);
+        var startTime = DateTimeOffset.UtcNow.AddDays(3);
+
+        NoExistingIdempotencyKey();
+        _compartmentRepository
+            .Setup(r => r.FindAvailableAsync(locker.Id, CompartmentSize.M, It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(compartment);
+
+        var request = new CreateReservationRequest(locker.Id, "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: startTime);
+
+        var result = await _sut.CreateAsync(request, CancellationToken.None);
+
+        result.StartTime.Should().Be(startTime);
+        result.EndTime.Should().Be(startTime.AddHours(2));
+        // The overlap check has to run against the requested window, not "now" —
+        // otherwise an advance booking would be checked against the wrong slot.
+        _compartmentRepository.Verify(
+            r => r.FindAvailableAsync(locker.Id, CompartmentSize.M, startTime, startTime.AddHours(2), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenStartTimeIsInThePast_ThrowsValidation()
+    {
+        var request = new CreateReservationRequest(Guid.NewGuid(), "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow.AddHours(-1));
+
+        await Assert.ThrowsAsync<ValidationAppException>(() => _sut.CreateAsync(request, CancellationToken.None));
+
+        _reservationRepository.Verify(r => r.GetByIdempotencyKeyAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenStartTimeIsSlightlyPast_IsAcceptedAsClockSkew()
+    {
+        var locker = EntityFixtures.OpenLocker();
+        var compartment = EntityFixtures.AvailableCompartment(locker);
+
+        NoExistingIdempotencyKey();
+        _compartmentRepository
+            .Setup(r => r.FindAvailableAsync(locker.Id, CompartmentSize.M, It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(compartment);
+
+        // A "start now" booking carries the client's clock — a couple of minutes
+        // of skew must not be rejected as a past booking.
+        var request = new CreateReservationRequest(locker.Id, "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow.AddMinutes(-2));
+
+        var result = await _sut.CreateAsync(request, CancellationToken.None);
+
+        result.CompartmentId.Should().Be(compartment.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenStartTimeIsTooFarInTheFuture_ThrowsValidation()
+    {
+        var request = new CreateReservationRequest(Guid.NewGuid(), "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow.AddDays(31));
 
         await Assert.ThrowsAsync<ValidationAppException>(() => _sut.CreateAsync(request, CancellationToken.None));
 
@@ -143,7 +208,7 @@ public class ReservationServiceTests
     [Fact]
     public async Task CreateAsync_WhenSizeIsNotAValidCompartmentSize_ThrowsValidation()
     {
-        var request = new CreateReservationRequest(Guid.NewGuid(), "XL", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString());
+        var request = new CreateReservationRequest(Guid.NewGuid(), "XL", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
 
         await Assert.ThrowsAsync<ValidationAppException>(() => _sut.CreateAsync(request, CancellationToken.None));
     }
@@ -158,7 +223,7 @@ public class ReservationServiceTests
         _reservationRepository.Setup(r => r.GetByIdempotencyKeyAsync("replayed-key", It.IsAny<CancellationToken>()))
             .ReturnsAsync(existing);
 
-        var request = new CreateReservationRequest(locker.Id, "M", DurationHours: 2, IdempotencyKey: "replayed-key");
+        var request = new CreateReservationRequest(locker.Id, "M", DurationHours: 2, IdempotencyKey: "replayed-key", StartTime: DateTimeOffset.UtcNow);
 
         var result = await _sut.CreateAsync(request, CancellationToken.None);
 

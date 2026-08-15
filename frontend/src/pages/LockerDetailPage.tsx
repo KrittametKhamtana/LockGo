@@ -2,15 +2,25 @@ import { useState } from "react";
 import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from "@mui/material";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { CompartmentSelector } from "../components/CompartmentSelector";
 import { useLocker } from "../hooks/useLockers";
-import { SIZE_LABEL, type CompartmentSizeAvailability } from "../types/locker";
+import { SIZE_LABEL, type BookingWindowParams, type CompartmentSizeAvailability } from "../types/locker";
 
 export function LockerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: locker, isLoading, isError } = useLocker(id);
+  const [searchParams] = useSearchParams();
+
+  // Read from the URL rather than router state so a refreshed or shared link
+  // still shows availability for the slot the visitor was looking at.
+  const startTime = searchParams.get("startTime");
+  const durationHours = Number(searchParams.get("durationHours"));
+  const bookingWindow: BookingWindowParams = startTime
+    ? { startTime, durationHours: durationHours || undefined }
+    : {};
+
+  const { data: locker, isLoading, isError } = useLocker(id, bookingWindow);
   const [selected, setSelected] = useState<CompartmentSizeAvailability | null>(null);
 
   if (isLoading) {
@@ -79,7 +89,15 @@ export function LockerDetailPage() {
         size="large"
         disabled={!selectedIsStillAvailable || !canBook}
         onClick={() =>
-          navigate("/reservations/new", { state: { locker, size: selected!.size, price: selected!.price } })
+          navigate("/reservations/new", {
+            state: {
+              locker,
+              size: selected!.size,
+              price: selected!.price,
+              startTime: bookingWindow.startTime,
+              durationHours: bookingWindow.durationHours,
+            },
+          })
         }
       >
         {selectedIsStillAvailable

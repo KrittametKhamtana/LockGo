@@ -1,3 +1,4 @@
+using LockGo.Application.Common;
 using LockGo.Application.DTOs;
 using LockGo.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -21,6 +22,7 @@ public class LockersController : ControllerBase
     /// size: S | M | L.
     /// availability: true to only return lockers with at least one available compartment.
     /// search: free-text match on locker name or address.
+    /// startTime/durationHours: the slot to report availability for; omit for "right now".
     /// </summary>
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<LockerListItemDto>>(StatusCodes.Status200OK)]
@@ -30,6 +32,8 @@ public class LockersController : ControllerBase
         [FromQuery] string? size,
         [FromQuery] bool? availability,
         [FromQuery] string? search,
+        [FromQuery] DateTimeOffset? startTime,
+        [FromQuery] int? durationHours,
         CancellationToken ct)
     {
         (double lat, double lng)? origin = TryParseLocation(location);
@@ -40,7 +44,9 @@ public class LockersController : ControllerBase
             distance,
             size,
             availability,
-            search);
+            search,
+            startTime,
+            durationHours);
 
         var result = await _lockerService.SearchAsync(query, ct);
         return Ok(result);
@@ -49,9 +55,13 @@ public class LockersController : ControllerBase
     [HttpGet("{id:guid}")]
     [ProducesResponseType<LockerDetailDto>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<LockerDetailDto>> GetById(Guid id, CancellationToken ct)
+    public async Task<ActionResult<LockerDetailDto>> GetById(
+        Guid id,
+        [FromQuery] DateTimeOffset? startTime,
+        [FromQuery] int? durationHours,
+        CancellationToken ct)
     {
-        var locker = await _lockerService.GetByIdAsync(id, ct);
+        var locker = await _lockerService.GetByIdAsync(id, BookingWindow.From(startTime, durationHours), ct);
         return Ok(locker);
     }
 

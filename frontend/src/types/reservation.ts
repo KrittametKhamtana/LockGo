@@ -7,6 +7,8 @@ export interface CreateReservationRequest {
   size: CompartmentSize;
   durationHours: number;
   idempotencyKey: string;
+  /** ISO 8601 with offset — when the booking should start. */
+  startTime: string;
 }
 
 export interface Reservation {

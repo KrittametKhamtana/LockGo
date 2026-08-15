@@ -1,10 +1,14 @@
+using System.Text;
 using LockGo.Api.Contracts;
 using LockGo.Api.Middleware;
 using LockGo.Application;
 using LockGo.Infrastructure;
 using LockGo.Infrastructure.Persistence;
+using LockGo.Infrastructure.Security;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -59,12 +63,33 @@ builder.Services.AddApplication();
 // two competing provider configurations for the same context type.
 if (builder.Environment.IsEnvironment("Testing"))
 {
-    builder.Services.AddRepositories();
+    builder.Services.AddRepositories().AddJwtAuth(builder.Configuration);
 }
 else
 {
     builder.Services.AddInfrastructure(builder.Configuration);
 }
+
+// Validates the JWTs AuthService issues. No endpoint requires [Authorize] yet
+// (sign-up/sign-in are the whole feature for now) — this just makes the token
+// real and ready for that, instead of decorative.
+var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtOptions.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwtOptions.Audience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Secret)),
+            ValidateLifetime = true,
+        };
+    });
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
@@ -78,6 +103,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors(FrontendCorsPolicy);
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 // Skipped under the "Testing" environment: WebApplicationFactory-based tests

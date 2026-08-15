@@ -8,6 +8,8 @@ namespace LockGo.Infrastructure.Persistence;
 public class EfUnitOfWork : IUnitOfWork
 {
     private const string IdempotencyKeyUniqueIndexName = "ix_reservations_idempotency_key";
+    private const string EmailUniqueIndexName = "ix_users_email";
+    private const string UsernameUniqueIndexName = "ix_users_username";
 
     private readonly LockGoDbContext _db;
 
@@ -60,6 +62,18 @@ public class EfUnitOfWork : IUnitOfWork
                 await transaction.RollbackAsync(ct);
                 throw new IdempotencyKeyConflictException("(see inner exception for the offending key)");
             }
+            catch (DbUpdateException ex) when (IsUniqueViolation(ex, EmailUniqueIndexName))
+            {
+                // Lost the race against another signup with the same email — the
+                // pre-check in AuthService caught the common case, this is the backstop.
+                await transaction.RollbackAsync(ct);
+                throw new ConflictException("EMAIL_TAKEN", "An account with this email already exists.");
+            }
+            catch (DbUpdateException ex) when (IsUniqueViolation(ex, UsernameUniqueIndexName))
+            {
+                await transaction.RollbackAsync(ct);
+                throw new ConflictException("USERNAME_TAKEN", "This username is already taken.");
+            }
             catch
             {
                 await transaction.RollbackAsync(ct);
@@ -75,9 +89,12 @@ public class EfUnitOfWork : IUnitOfWork
     /// with SQLSTATE 23505, which we translate here instead of leaking a raw
     /// DbUpdateException up to the API layer.
     /// </summary>
-    private static bool IsIdempotencyKeyUniqueViolation(DbUpdateException ex)
+    private static bool IsIdempotencyKeyUniqueViolation(DbUpdateException ex) =>
+        IsUniqueViolation(ex, IdempotencyKeyUniqueIndexName);
+
+    private static bool IsUniqueViolation(DbUpdateException ex, string constraintName)
     {
         return ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pgEx
-               && pgEx.ConstraintName == IdempotencyKeyUniqueIndexName;
+               && pgEx.ConstraintName == constraintName;
     }
 }

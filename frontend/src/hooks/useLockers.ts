@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getLockerById, searchLockers } from "../api/lockers";
-import type { LockerSearchParams } from "../types/locker";
+import type { BookingWindowParams, LockerSearchParams } from "../types/locker";
 
 export function useLockers(params: LockerSearchParams) {
   return useQuery({
@@ -9,10 +9,10 @@ export function useLockers(params: LockerSearchParams) {
   });
 }
 
-export function useLocker(id: string | undefined) {
+export function useLocker(id: string | undefined, window: BookingWindowParams = {}) {
   return useQuery({
-    queryKey: ["locker", id],
-    queryFn: () => getLockerById(id!),
+    queryKey: ["locker", id, window],
+    queryFn: () => getLockerById(id!, window),
     enabled: Boolean(id),
   });
 }
