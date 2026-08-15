@@ -27,7 +27,9 @@ diagram + the concurrency-critical reservation path),
 [`docs/DEBUGGING.md`](docs/DEBUGGING.md) (a real race condition found and
 fixed while writing the concurrency tests),
 [`docs/AI_USAGE.md`](docs/AI_USAGE.md) (prompts, AI-vs-human decisions, a
-self code-review).
+self code-review),
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) (Docker images, GitHub
+Actions CD to an existing server, DuckDNS + Caddy).
 
 ---
 
@@ -157,7 +159,7 @@ gate endpoints later without it being decorative today.
 | Database | PostgreSQL | Specified — already provisioned on a free-tier server, hence the low-connection-pool, index-conscious design throughout |
 | API docs | Swashbuckle (Swagger/OpenAPI) | Interactive docs for free from the existing controller/DTO annotations |
 | Backend testing | xUnit, Moq, FluentAssertions **7.x**, `Microsoft.AspNetCore.Mvc.Testing`, EF Core InMemory | FluentAssertions pinned below 8.x deliberately — v8+ moved to a commercial license, 7.x is the last MIT-licensed release |
-| CI | GitHub Actions | No self-hosted agent needed, unlike Jenkins — the free-tier server can't spare RAM for one |
+| CI/CD | GitHub Actions, Docker, GHCR, Caddy | No self-hosted agent needed, unlike Jenkins — the target server can't spare RAM for one (it was literally running Jenkins for an earlier project; retiring that was part of this move). Full pipeline: test → build+push images to GHCR → SSH deploy → Caddy reverse-proxies both containers with automatic Let's Encrypt TLS. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) |
 
 MUI is pinned to **7.3.11** rather than the newest `9.x` tag — `9.3.1`'s
 type definitions broke `Stack`/`Typography` prop typing under current
@@ -456,6 +458,9 @@ This repo is set up for: `Issue → Branch → Dev → AI-assisted coding → Te
 → Commit → PR → Review → Merge`. In practice for this assessment: one
 continuous AI-assisted build session (see [§10](#10-ai-tools-ที่ใช้)),
 verified with `dotnet test`/`npm run build`/`npm run lint` before each
-commit, on `main`. For follow-on work, branch per feature/fix
-(`feature/...`, `fix/...`), open a PR against `main`, and let the CI
-workflow (`.github/workflows/ci.yml`) gate the merge.
+commit, on `master` (this repo's actual default branch). For follow-on
+work, branch per feature/fix (`feature/...`, `fix/...`), open a PR against
+`master`, and let the CI workflow (`.github/workflows/ci.yml`) gate the
+merge — every push to `master` that passes both test jobs also builds and
+deploys automatically (see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)), so
+merging to `master` is a real release, not just a commit.

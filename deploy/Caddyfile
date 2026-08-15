@@ -1,0 +1,11 @@
+# Replace both hostnames with your actual DuckDNS names before first run.
+# Caddy issues and renews Let's Encrypt certificates for each automatically
+# (HTTP-01 challenge — works fine here since neither is a wildcard).
+
+lockgo-app.duckdns.org {
+    reverse_proxy ui:80
+}
+
+lockgo-api.duckdns.org {
+    reverse_proxy api:8080
+}
