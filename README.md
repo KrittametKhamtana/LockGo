@@ -455,6 +455,30 @@ out of this process rather than being hidden —
 
 ## Git workflow
 
+```mermaid
+flowchart TD
+    subgraph loop["Per feature / bug"]
+        A([Issue]) --> B["Branch off develop<br/>SPxxx/feature-or-bug/detail"]
+        B --> C[AI-assisted Coding]
+        C --> D["Test<br/>dotnet test / npm build + lint"]
+        D --> E[Commit]
+        E --> F[Push branch]
+        F --> G["Open PR into develop"]
+        G --> H{CI passes?}
+        H -- No --> C
+        H -- Yes --> I[Review]
+        I --> J[Merge into develop]
+    end
+
+    J --> K(["develop accumulates<br/>a release worth of work"])
+    K --> L["Test + review develop"]
+    L --> M["Open PR<br/>develop → master"]
+    M --> N{CI passes?}
+    N -- No --> K
+    N -- Yes --> O[Merge into master]
+    O --> P(["Auto build + deploy"])
+```
+
 Two long-lived branches:
 
 - **`develop`** — the default branch (what a fresh clone/PR points to).
