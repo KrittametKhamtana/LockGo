@@ -13,6 +13,7 @@ import {
   parseLocalInputValue,
   toLocalInputValue,
 } from "../utils/booking";
+import { generateUUID } from "../utils/uuid";
 
 interface ReservationRouteState {
   locker: LockerDetail;
@@ -31,7 +32,7 @@ export function ReservationPage() {
   // Generated once when the page loads — every Confirm click (including a
   // double-click retry) reuses the SAME key, which is what lets the backend
   // recognize a resend and return the original booking instead of a duplicate.
-  const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
+  const idempotencyKey = useMemo(() => generateUUID(), []);
   // Pre-filled from the slot the visitor browsed, so the availability they saw
   // is the slot they're about to book — still editable here.
   const [durationHours, setDurationHours] = useState(routeState?.durationHours ?? 2);
