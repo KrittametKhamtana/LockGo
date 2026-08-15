@@ -14,16 +14,22 @@ Review).
 | Test | ✅ | [`TESTING.md`](TESTING.md) |
 | Architecture Diagram | ✅ | [`ARCHITECTURE.md`](ARCHITECTURE.md) (current structure) |
 | AI Workflow | ✅ | [`AI-WORKFLOW.md`](AI-WORKFLOW.md) |
-| AI Prompt | ⏳ Deferred | Not yet split out — see note below |
-| AI Generated Code Review | ⏳ Deferred | Not yet split out — see note below |
+| AI Prompt | ✅ | [`AI-PROMPTS.md`](AI-PROMPTS.md) (the prompt sequence used, with the goal behind each one) |
+| AI Generated Code Review | ✅ | [`AI-CODE-REVIEW.md`](AI-CODE-REVIEW.md) (human review of the AI-written booking flow, UI → Service) |
 
-## Note on the two deferred items
+## How the two AI-review documents differ
 
-[`AI_USAGE.md`](AI_USAGE.md) (kept from before this reorganization) already
-contains a draft of both — the actual prompts used (§1) and a self-review
-of the highest-stakes code section (§3) — but neither has been polished
-into its own standalone deliverable yet. Splitting them out is tracked
-separately, not abandoned.
+Both exist on purpose and cover different code:
+
+- [`AI-CODE-REVIEW.md`](AI-CODE-REVIEW.md) — **a human reviewing the AI's
+  code**, written in Thai. Covers the booking flow from the screen down to
+  the service (`ReservationPage` → `useCreateReservation` → API →
+  `ReservationService.CreateAsync`), checked against all five required
+  points: correctness, bugs, security, performance, maintainability. Found
+  a real bug the 60-test suite can't catch.
+- [`AI_USAGE.md`](AI_USAGE.md) §3 — **the AI reviewing its own code**,
+  covering a different section: the internals of the reservation
+  transaction (`CreateInTransactionAsync` + `EfUnitOfWork`).
 
 ## Everything else in this folder
 
@@ -31,5 +37,6 @@ separately, not abandoned.
   while writing the concurrency tests.
 - [`DEPLOYMENT.md`](DEPLOYMENT.md) — Docker images, GitHub Actions CD,
   DuckDNS + Caddy.
-- [`AI_USAGE.md`](AI_USAGE.md) — full prompt/workflow/code-review write-up
-  this folder's docs were extracted and updated from.
+- [`AI_USAGE.md`](AI_USAGE.md) — the original full write-up this folder's
+  docs were extracted from. Still the only place covering the live-Postgres
+  pass and the two bugs it caught (§4).
