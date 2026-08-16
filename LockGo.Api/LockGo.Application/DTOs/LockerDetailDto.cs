@@ -1,7 +1,7 @@
 namespace LockGo.Application.DTOs;
 
 public record LockerDetailDto(
-    Guid Id,
+    int Id,
     string Name,
     string Address,
     double Lat,

@@ -12,7 +12,7 @@ namespace LockGo.Application.DTOs;
 /// out) and uses it as-is for the availability-overlap check.
 /// </summary>
 public record CreateReservationRequest(
-    Guid LockerId,
+    int LockerId,
     string Size,
     int DurationHours,
     string IdempotencyKey,

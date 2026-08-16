@@ -3,7 +3,7 @@ import type { CompartmentSize } from "./locker";
 export type ReservationStatus = "Active" | "Completed" | "Cancelled";
 
 export interface CreateReservationRequest {
-  lockerId: string;
+  lockerId: number;
   size: CompartmentSize;
   durationHours: number;
   idempotencyKey: string;
@@ -12,12 +12,13 @@ export interface CreateReservationRequest {
 }
 
 export interface Reservation {
-  id: string;
+  id: number;
+  /** The public lookup key — this is what the confirmation URL uses, never `id`. */
   bookingNumber: string;
-  lockerId: string;
+  lockerId: number;
   lockerName: string;
   lockerAddress: string;
-  compartmentId: string;
+  compartmentId: number;
   compartmentSize: CompartmentSize;
   price: number;
   startTime: string;

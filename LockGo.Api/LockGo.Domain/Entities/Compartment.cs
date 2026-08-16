@@ -4,8 +4,8 @@ namespace LockGo.Domain.Entities;
 
 public class Compartment
 {
-    public Guid Id { get; set; }
-    public Guid LockerId { get; set; }
+    public int Id { get; set; }
+    public int LockerId { get; set; }
     public Locker Locker { get; set; } = null!;
 
     public CompartmentSize Size { get; set; }

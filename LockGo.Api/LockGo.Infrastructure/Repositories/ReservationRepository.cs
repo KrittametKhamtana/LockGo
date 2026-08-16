@@ -21,12 +21,12 @@ public class ReservationRepository : IReservationRepository
             .FirstOrDefaultAsync(r => r.IdempotencyKey == idempotencyKey, ct);
     }
 
-    public async Task<Reservation?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct)
+    public async Task<Reservation?> GetByBookingNumberAsync(string bookingNumber, CancellationToken ct)
     {
         return await _db.Reservations
             .AsNoTracking()
             .Include(r => r.Compartment).ThenInclude(c => c.Locker)
-            .FirstOrDefaultAsync(r => r.Id == id, ct);
+            .FirstOrDefaultAsync(r => r.BookingNumber == bookingNumber, ct);
     }
 
     public void Add(Reservation reservation)

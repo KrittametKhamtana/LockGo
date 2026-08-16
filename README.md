@@ -60,7 +60,7 @@ sign-in.
    button is protected against duplicate submissions from a rapid
    double-click (see [§2](#2-architecture)).
 4. **Confirmation** — booking number, locker, compartment size, start/
-   expiry time, status. The URL is a permalink (`/reservations/{id}`) so
+   expiry time, status. The URL is a permalink (`/reservations/{bookingNumber}`) so
    it survives a refresh or gets shared.
 
 **Bonus**: account sign-up and sign-in issue a JWT, stored client-side.
@@ -284,9 +284,16 @@ Schema reference (ERD, column/index detail, migrations):
    dotnet ef database update --project LockGo.Infrastructure --startup-project LockGo.Api
    ```
 
-   Two migrations exist: `InitialCreate` (lockers/compartments/
-   reservations/users) and `AddUserAuthFields` (email/username/password
-   hash columns for sign-up/sign-in).
+   Three migrations exist: `InitialCreate` (lockers/compartments/
+   reservations/users), `AddUserAuthFields` (email/username/password
+   hash columns for sign-up/sign-in), and `SwitchToSequentialIntIds`
+   (uuid keys → sequential integers).
+
+   ⚠️ **`SwitchToSequentialIntIds` drops and recreates all four tables** —
+   Postgres cannot cast `uuid` to `integer`, so the columns can't be altered
+   in place. Seed lockers/compartments come back on the next startup;
+   reservations and registered accounts do not. See
+   [`deliverables/DATABASE.md`](deliverables/DATABASE.md#migrations).
 
 4. Seed data is inserted automatically on startup — **idempotent per
    locker** (matched by name, not an all-or-nothing gate), so re-running
@@ -420,7 +427,7 @@ why.
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/reservations` | Books a **locker + size** (not a specific compartment — the server assigns a free one of that size inside the transaction). Body: `{ lockerId, size, durationHours, idempotencyKey, startTime }`. Idempotent on `idempotencyKey` — safe to retry, including a double-clicked Confirm resending the same request. |
-| `GET` | `/api/reservations/{id}` | Fetch a booking by ID — what the confirmation screen polls. |
+| `GET` | `/api/reservations/{bookingNumber}` | Fetch a booking by its booking number — what the confirmation screen polls. Keyed on the random booking number rather than the sequential `id`, so the shareable permalink can't be walked to read other people's bookings. |
 
 **Error reference**
 

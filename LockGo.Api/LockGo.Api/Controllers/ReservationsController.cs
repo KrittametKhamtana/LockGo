@@ -27,15 +27,20 @@ public class ReservationsController : ControllerBase
     public async Task<ActionResult<ReservationDto>> Create([FromBody] CreateReservationRequest request, CancellationToken ct)
     {
         var reservation = await _reservationService.CreateAsync(request, ct);
-        return CreatedAtAction(nameof(GetById), new { id = reservation.Id }, reservation);
+        return CreatedAtAction(nameof(GetByBookingNumber), new { bookingNumber = reservation.BookingNumber }, reservation);
     }
 
-    [HttpGet("{id:guid}")]
+    /// <summary>
+    /// Keyed on the public BookingNumber, not the sequential primary key —
+    /// the confirmation URL is a shareable permalink, and an incrementing id
+    /// there would let anyone walk it to read other people's bookings.
+    /// </summary>
+    [HttpGet("{bookingNumber}")]
     [ProducesResponseType<ReservationDto>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<ReservationDto>> GetById(Guid id, CancellationToken ct)
+    public async Task<ActionResult<ReservationDto>> GetByBookingNumber(string bookingNumber, CancellationToken ct)
     {
-        var reservation = await _reservationService.GetByIdAsync(id, ct);
+        var reservation = await _reservationService.GetByBookingNumberAsync(bookingNumber, ct);
         return Ok(reservation);
     }
 }

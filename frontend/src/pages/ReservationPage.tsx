@@ -85,7 +85,7 @@ export function ReservationPage() {
       },
       {
         onSuccess: (reservation) => {
-          navigate(`/reservations/${reservation.id}`, { replace: true });
+          navigate(`/reservations/${reservation.bookingNumber}`, { replace: true });
         },
         onSettled: () => {
           submittingRef.current = false;

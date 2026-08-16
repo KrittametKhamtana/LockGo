@@ -14,7 +14,7 @@ erDiagram
     USER ||--o{ RESERVATION : makes
 
     LOCKER {
-        uuid id PK
+        int id PK
         string name
         string address
         double lat
@@ -22,18 +22,18 @@ erDiagram
         string operating_status "Open | Closed"
     }
     COMPARTMENT {
-        uuid id PK
-        uuid locker_id FK
+        int id PK
+        int locker_id FK
         string size "S | M | L"
         decimal price
         string status "Available | Occupied"
         uint xmin "system column, concurrency token"
     }
     RESERVATION {
-        uuid id PK
+        int id PK
         string booking_number UK
-        uuid user_id FK
-        uuid compartment_id FK
+        int user_id FK
+        int compartment_id FK
         timestamptz start_time
         timestamptz end_time
         string status "Active | Completed | Cancelled"
@@ -41,7 +41,7 @@ erDiagram
         timestamptz created_at
     }
     USER {
-        uuid id PK
+        int id PK
         string name "mock-user field"
         string first_name "nullable"
         string last_name "nullable"
@@ -63,7 +63,7 @@ for why `MockUser` is still what every reservation is attributed to.
 
 | Column | Type | Nullable | Notes |
 |---|---|---|---|
-| `id` | `uuid` | No | PK |
+| `id` | `integer` | No | PK, identity (sequential) |
 | `name` | `varchar(200)` | No | |
 | `address` | `varchar(500)` | No | |
 | `lat` / `lng` | `double precision` | No | |
@@ -73,8 +73,8 @@ for why `MockUser` is still what every reservation is attributed to.
 
 | Column | Type | Nullable | Notes |
 |---|---|---|---|
-| `id` | `uuid` | No | PK |
-| `locker_id` | `uuid` | No | FK → `lockers.id`, `ON DELETE CASCADE` |
+| `id` | `integer` | No | PK, identity (sequential) |
+| `locker_id` | `integer` | No | FK → `lockers.id`, `ON DELETE CASCADE` |
 | `size` | `varchar(1)` | No | `S` / `M` / `L` |
 | `price` | `numeric(10,2)` | No | |
 | `status` | `varchar(20)` | No | `Available` / `Occupied` — **denormalized fast-read flag only**, never trusted on the write path (see [`ARCHITECTURE.md`](ARCHITECTURE.md#availability-model)) |
@@ -84,10 +84,10 @@ for why `MockUser` is still what every reservation is attributed to.
 
 | Column | Type | Nullable | Notes |
 |---|---|---|---|
-| `id` | `uuid` | No | PK |
+| `id` | `integer` | No | PK, identity (sequential) |
 | `booking_number` | `varchar(32)` | No | Human-readable reference (e.g. `LG-20260814-AB3F`), unique |
-| `user_id` | `uuid` | No | FK → `users.id`, `ON DELETE RESTRICT` |
-| `compartment_id` | `uuid` | No | FK → `compartments.id`, `ON DELETE RESTRICT` |
+| `user_id` | `integer` | No | FK → `users.id`, `ON DELETE RESTRICT` |
+| `compartment_id` | `integer` | No | FK → `compartments.id`, `ON DELETE RESTRICT` |
 | `start_time` / `end_time` | `timestamptz` | No | |
 | `status` | `varchar(20)` | No | `Active` / `Completed` / `Cancelled` — no `Expired` state; whether a reservation is currently active is derived (`Status == Active && EndTime > Now`), never swept by a background job |
 | `idempotency_key` | `varchar(64)` | No | Client-generated, unique — makes `POST /api/reservations` safe to retry (double-click, network resend) |
@@ -97,7 +97,7 @@ for why `MockUser` is still what every reservation is attributed to.
 
 | Column | Type | Nullable | Notes |
 |---|---|---|---|
-| `id` | `uuid` | No | PK |
+| `id` | `integer` | No | PK, identity (sequential) |
 | `name` | `varchar(200)` | No | Original mock-user field — the single hardcoded row every reservation is attributed to today |
 | `first_name` / `last_name` | `varchar(100)` | Yes | Real-account fields, unset on the mock-user row |
 | `email` | `varchar(320)` | Yes | Real-account field, unique |
@@ -122,7 +122,7 @@ A row is either "the mock user" (`name` only) or "a real account"
 
 ## Migrations
 
-Two migrations exist, both under
+Three migrations exist, all under
 [`LockGo.Infrastructure/Persistence/Migrations`](../LockGo.Api/LockGo.Infrastructure/Persistence/Migrations):
 
 1. **`InitialCreate`** (`20260814095943`) — `lockers`, `compartments`,
@@ -132,6 +132,20 @@ Two migrations exist, both under
    `last_name`, `email`, `username`, `password_hash` to `users`, plus the
    unique indexes on `email`/`username`. Additive only — no data loss for
    existing rows, which simply get `NULL` in the new columns.
+3. **`SwitchToSequentialIntIds`** (`20260816191359`) — every primary and
+   foreign key changes from `uuid` to a sequential `integer` identity column,
+   so ids are readable when querying the database directly.
+
+   **This one is destructive.** Postgres has no cast from `uuid` to `integer`,
+   so the columns cannot be altered in place — the migration drops and
+   recreates all four tables. Lockers and compartments come back on the next
+   startup (the seeder is idempotent); reservations and registered accounts
+   do not. It is written for a development database.
+
+   Because sequential ids are trivially guessable, the public reservation
+   lookup moved off the primary key: `GET /api/reservations/{bookingNumber}`
+   keys on the random `booking_number` instead, and `id` never appears in a
+   URL. See [`API.md`](API.md#get-apireservationsbookingnumber).
 
 ### Running migrations
 

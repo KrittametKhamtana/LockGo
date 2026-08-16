@@ -6,7 +6,7 @@ export async function createReservation(request: CreateReservationRequest): Prom
   return data;
 }
 
-export async function getReservationById(id: string): Promise<Reservation> {
-  const { data } = await apiClient.get<Reservation>(`/reservations/${id}`);
+export async function getReservationByBookingNumber(bookingNumber: string): Promise<Reservation> {
+  const { data } = await apiClient.get<Reservation>(`/reservations/${bookingNumber}`);
   return data;
 }

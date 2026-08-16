@@ -14,7 +14,7 @@ export interface SignInRequest {
 
 export interface AuthResponse {
   token: string;
-  userId: string;
+  userId: number;
   firstName: string;
   lastName: string;
   email: string;
@@ -22,7 +22,7 @@ export interface AuthResponse {
 }
 
 export interface AuthUser {
-  userId: string;
+  userId: number;
   firstName: string;
   lastName: string;
   email: string;

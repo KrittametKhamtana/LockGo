@@ -2,7 +2,7 @@ namespace LockGo.Application.DTOs;
 
 public record AuthResponseDto(
     string Token,
-    Guid UserId,
+    int UserId,
     string FirstName,
     string LastName,
     string Email,

@@ -79,6 +79,31 @@ public static class DbSeeder
         }
 
         await db.SaveChangesAsync(ct);
+        await ResyncUserIdentityAsync(db, ct);
+    }
+
+    /// <summary>
+    /// The mock user is inserted with an explicit Id (MockUser.Id is a compile-time
+    /// constant the booking path writes into every reservation), which leaves the
+    /// identity sequence still pointing at that value — the first real sign-up would
+    /// then collide on the primary key. Advance the sequence past whatever is already
+    /// there. No-op on providers without sequences (the InMemory provider in tests).
+    /// </summary>
+    private static async Task ResyncUserIdentityAsync(LockGoDbContext db, CancellationToken ct)
+    {
+        if (!db.Database.IsNpgsql())
+        {
+            return;
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            SELECT setval(
+                pg_get_serial_sequence('users', 'id'),
+                GREATEST((SELECT COALESCE(MAX(id), 0) FROM users), 1)
+            )
+            """,
+            ct);
     }
 
     private static Locker CreateLocker(
@@ -91,7 +116,6 @@ public static class DbSeeder
     {
         var locker = new Locker
         {
-            Id = Guid.NewGuid(),
             Name = name,
             Address = address,
             Lat = lat,
@@ -99,11 +123,11 @@ public static class DbSeeder
             OperatingStatus = operatingStatus,
         };
 
+        // Ids are identity columns now — left unset so Postgres assigns them,
+        // and LockerId is filled in by EF from the navigation on insert.
         locker.Compartments = inventory
             .SelectMany(entry => Enumerable.Range(0, entry.Count).Select(_ => new Compartment
             {
-                Id = Guid.NewGuid(),
-                LockerId = locker.Id,
                 Size = entry.Size,
                 Price = PriceBySize[entry.Size],
                 Status = CompartmentStatus.Available,

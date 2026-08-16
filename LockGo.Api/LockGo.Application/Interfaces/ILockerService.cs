@@ -8,5 +8,5 @@ public interface ILockerService
     Task<IReadOnlyList<LockerListItemDto>> SearchAsync(LockerSearchQuery query, CancellationToken ct);
 
     /// <summary>Throws NotFoundException if the locker doesn't exist.</summary>
-    Task<LockerDetailDto> GetByIdAsync(Guid id, BookingWindow window, CancellationToken ct);
+    Task<LockerDetailDto> GetByIdAsync(int id, BookingWindow window, CancellationToken ct);
 }

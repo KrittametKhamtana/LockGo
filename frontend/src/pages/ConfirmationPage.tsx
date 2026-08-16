@@ -19,9 +19,9 @@ function formatDateTime(iso: string) {
 }
 
 export function ConfirmationPage() {
-  const { id } = useParams<{ id: string }>();
+  const { bookingNumber } = useParams<{ bookingNumber: string }>();
   const navigate = useNavigate();
-  const { data: reservation, isLoading, isError } = useReservationQuery(id);
+  const { data: reservation, isLoading, isError } = useReservationQuery(bookingNumber);
 
   if (isLoading) {
     return (

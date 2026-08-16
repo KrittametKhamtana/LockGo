@@ -158,7 +158,6 @@ public class ReservationService : IReservationService
 
         var reservation = new Reservation
         {
-            Id = Guid.NewGuid(),
             BookingNumber = BookingNumberGenerator.Generate(),
             UserId = MockUser.Id,
             CompartmentId = compartment.Id,
@@ -176,10 +175,10 @@ public class ReservationService : IReservationService
         return MapToDto(reservation);
     }
 
-    public async Task<ReservationDto> GetByIdAsync(Guid id, CancellationToken ct)
+    public async Task<ReservationDto> GetByBookingNumberAsync(string bookingNumber, CancellationToken ct)
     {
-        var reservation = await _reservationRepository.GetByIdWithDetailsAsync(id, ct)
-            ?? throw new NotFoundException("RESERVATION_NOT_FOUND", $"Reservation '{id}' was not found.");
+        var reservation = await _reservationRepository.GetByBookingNumberAsync(bookingNumber, ct)
+            ?? throw new NotFoundException("RESERVATION_NOT_FOUND", $"Reservation '{bookingNumber}' was not found.");
 
         return MapToDto(reservation);
     }

@@ -52,11 +52,11 @@ public class LockersController : ControllerBase
         return Ok(result);
     }
 
-    [HttpGet("{id:guid}")]
+    [HttpGet("{id:int}")]
     [ProducesResponseType<LockerDetailDto>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<LockerDetailDto>> GetById(
-        Guid id,
+        int id,
         [FromQuery] DateTimeOffset? startTime,
         [FromQuery] int? durationHours,
         CancellationToken ct)

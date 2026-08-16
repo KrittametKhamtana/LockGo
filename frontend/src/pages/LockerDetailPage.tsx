@@ -22,7 +22,7 @@ export function LockerDetailPage() {
 
   const { data: locker, isLoading, isError } = useLocker(id, bookingWindow);
   const [selected, setSelected] = useState<CompartmentSizeAvailability | null>(null);
-
+console.log('selected', selected);
   if (isLoading) {
     return (
       <Stack alignItems="center" py={6}>

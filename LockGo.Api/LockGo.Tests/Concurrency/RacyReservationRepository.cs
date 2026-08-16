@@ -66,11 +66,11 @@ public class RacyReservationRepository : IReservationRepository
         return existing;
     }
 
-    public Task<Reservation?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct)
+    public Task<Reservation?> GetByBookingNumberAsync(string bookingNumber, CancellationToken ct)
     {
         lock (_gate)
         {
-            return Task.FromResult(_all.FirstOrDefault(r => r.Id == id));
+            return Task.FromResult(_all.FirstOrDefault(r => r.BookingNumber == bookingNumber));
         }
     }
 
@@ -80,7 +80,7 @@ public class RacyReservationRepository : IReservationRepository
     /// still free, so the two fakes agree on availability the way the real
     /// query and DB do.
     /// </summary>
-    public bool HasOverlap(Guid compartmentId, DateTimeOffset start, DateTimeOffset end)
+    public bool HasOverlap(int compartmentId, DateTimeOffset start, DateTimeOffset end)
     {
         lock (_gate)
         {

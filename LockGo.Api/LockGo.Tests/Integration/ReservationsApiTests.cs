@@ -34,7 +34,7 @@ public class ReservationsApiTests : IClassFixture<LockGoWebApplicationFactory>, 
         created.CompartmentSize.Should().Be(size);
         created.Status.Should().Be("Active");
 
-        var getResponse = await _client.GetAsync($"/api/reservations/{created.Id}");
+        var getResponse = await _client.GetAsync($"/api/reservations/{created.BookingNumber}");
         getResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var fetched = await getResponse.Content.ReadFromJsonAsync<ReservationDto>();
@@ -60,7 +60,7 @@ public class ReservationsApiTests : IClassFixture<LockGoWebApplicationFactory>, 
     [Fact]
     public async Task GetById_WhenReservationDoesNotExist_Returns404()
     {
-        var response = await _client.GetAsync($"/api/reservations/{Guid.NewGuid()}");
+        var response = await _client.GetAsync("/api/reservations/LG-NOPE-000000");
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -68,7 +68,7 @@ public class ReservationsApiTests : IClassFixture<LockGoWebApplicationFactory>, 
     [Fact]
     public async Task Create_ForNonexistentLocker_Returns404WithErrorShape()
     {
-        var request = new CreateReservationRequest(Guid.NewGuid(), "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
+        var request = new CreateReservationRequest(999999, "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
 
         var response = await _client.PostAsJsonAsync("/api/reservations", request);
 
@@ -105,6 +105,29 @@ public class ReservationsApiTests : IClassFixture<LockGoWebApplicationFactory>, 
     }
 
     [Fact]
+    public async Task Create_WithWindowOverlappingByOneMinuteOnASingleCompartmentSize_ReturnsConflict()
+    {
+        // Siam Square is seeded with exactly 1 Large compartment — any second
+        // booking of that size MUST land on the same physical unit, so this
+        // isolates the overlap check from "got assigned a different compartment".
+        var lockers = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?search=Siam Square");
+        var siamSquare = lockers!.Single();
+
+        var start = DateTimeOffset.UtcNow.AddHours(1);
+        var first = new CreateReservationRequest(siamSquare.Id, "L", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: start);
+        var firstResponse = await _client.PostAsJsonAsync("/api/reservations", first);
+        firstResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        // Starts 1 minute before the first reservation's EndTime — a genuine,
+        // unambiguous overlap (matches the bug report: 1:20+2h vs 3:19 start).
+        var secondStart = start.AddHours(2).AddMinutes(-1);
+        var second = new CreateReservationRequest(siamSquare.Id, "L", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: secondStart);
+        var secondResponse = await _client.PostAsJsonAsync("/api/reservations", second);
+
+        secondResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
     public async Task Create_ReplayedWithSameIdempotencyKey_ReturnsTheSameReservationInstead()
     {
         var (lockerId, size) = await GetLockerWithAvailableSizeAsync(minAvailable: 2);
@@ -125,7 +148,7 @@ public class ReservationsApiTests : IClassFixture<LockGoWebApplicationFactory>, 
         secondDto.CompartmentId.Should().Be(firstDto.CompartmentId);
     }
 
-    private async Task<(Guid LockerId, string Size)> GetLockerWithAvailableSizeAsync(int minAvailable = 1)
+    private async Task<(int LockerId, string Size)> GetLockerWithAvailableSizeAsync(int minAvailable = 1)
     {
         var lockers = await _client.GetFromJsonAsync<List<LockerListItemDto>>("/api/lockers?availability=true");
         var locker = lockers!.First(l =>
@@ -135,7 +158,7 @@ public class ReservationsApiTests : IClassFixture<LockGoWebApplicationFactory>, 
         return (locker.Id, locker.SizeAvailability.First(s => s.AvailableCount >= minAvailable).Size);
     }
 
-    private async Task<CompartmentSizeAvailabilityDto> GetSizeAvailabilityAsync(Guid lockerId, string size)
+    private async Task<CompartmentSizeAvailabilityDto> GetSizeAvailabilityAsync(int lockerId, string size)
     {
         var detail = await _client.GetFromJsonAsync<LockerDetailDto>($"/api/lockers/{lockerId}");
         return detail!.SizeAvailability.Single(s => s.Size == size);

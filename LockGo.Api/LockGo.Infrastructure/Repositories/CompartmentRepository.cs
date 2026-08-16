@@ -16,7 +16,7 @@ public class CompartmentRepository : ICompartmentRepository
     }
 
     public async Task<Compartment?> FindAvailableAsync(
-        Guid lockerId,
+        int lockerId,
         CompartmentSize size,
         DateTimeOffset start,
         DateTimeOffset end,
@@ -40,7 +40,7 @@ public class CompartmentRepository : ICompartmentRepository
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task<bool> ExistsForSizeAsync(Guid lockerId, CompartmentSize size, CancellationToken ct)
+    public async Task<bool> ExistsForSizeAsync(int lockerId, CompartmentSize size, CancellationToken ct)
     {
         return await _db.Compartments
             .AsNoTracking()

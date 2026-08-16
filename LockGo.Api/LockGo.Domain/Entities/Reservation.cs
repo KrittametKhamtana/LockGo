@@ -4,15 +4,19 @@ namespace LockGo.Domain.Entities;
 
 public class Reservation
 {
-    public Guid Id { get; set; }
+    public int Id { get; set; }
 
-    /// <summary>Unique, human-readable booking reference (e.g. LG-20260814-AB3F).</summary>
+    /// <summary>
+    /// Unique, human-readable booking reference (e.g. LG-20260814-AB3F). This is
+    /// the public lookup key — <see cref="Id"/> is sequential and must never
+    /// appear in a URL, or anyone could enumerate other people's bookings.
+    /// </summary>
     public string BookingNumber { get; set; } = string.Empty;
 
-    public Guid UserId { get; set; }
+    public int UserId { get; set; }
     public User User { get; set; } = null!;
 
-    public Guid CompartmentId { get; set; }
+    public int CompartmentId { get; set; }
     public Compartment Compartment { get; set; } = null!;
 
     public DateTimeOffset StartTime { get; set; }

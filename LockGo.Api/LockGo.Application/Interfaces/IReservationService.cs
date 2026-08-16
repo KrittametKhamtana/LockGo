@@ -13,6 +13,10 @@ public interface IReservationService
     /// </summary>
     Task<ReservationDto> CreateAsync(CreateReservationRequest request, CancellationToken ct);
 
-    /// <summary>Throws NotFoundException if the reservation doesn't exist.</summary>
-    Task<ReservationDto> GetByIdAsync(Guid id, CancellationToken ct);
+    /// <summary>
+    /// Fetches by public BookingNumber rather than the sequential id, so a
+    /// confirmation permalink can't be walked to read other people's bookings.
+    /// Throws NotFoundException if the reservation doesn't exist.
+    /// </summary>
+    Task<ReservationDto> GetByBookingNumberAsync(string bookingNumber, CancellationToken ct);
 }

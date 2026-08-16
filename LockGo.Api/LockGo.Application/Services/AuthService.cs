@@ -40,7 +40,6 @@ public partial class AuthService : IAuthService
 
         var user = new User
         {
-            Id = Guid.NewGuid(),
             Name = $"{request.FirstName} {request.LastName}",
             FirstName = request.FirstName,
             LastName = request.LastName,

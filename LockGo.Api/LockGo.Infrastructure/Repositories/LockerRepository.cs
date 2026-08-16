@@ -22,6 +22,19 @@ public class LockerRepository : ILockerRepository
         var window = BookingWindow.From(query.StartTime, query.DurationHours);
         var windowStart = window.Start;
         var windowEnd = window.End;
+ var lockersss = await _db.Lockers.AsNoTracking()
+    .Include(l => l.Compartments).ThenInclude(c => c.Reservations)
+    .ToListAsync();
+
+var json = System.Text.Json.JsonSerializer.Serialize(lockersss, new System.Text.Json.JsonSerializerOptions
+{
+    WriteIndented = true,
+    ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles,
+});
+
+Console.WriteLine(json);
+Console.WriteLine("windowEnd", windowStart.ToString());
+Console.WriteLine("windowEnd", windowEnd.ToString());
 
         var lockers = _db.Lockers
             .AsNoTracking()
@@ -85,7 +98,7 @@ public class LockerRepository : ILockerRepository
         return await lockers.ToListAsync(ct);
     }
 
-    public async Task<Locker?> GetByIdAsync(Guid id, BookingWindow window, CancellationToken ct)
+    public async Task<Locker?> GetByIdAsync(int id, BookingWindow window, CancellationToken ct)
     {
         var windowStart = window.Start;
         var windowEnd = window.End;

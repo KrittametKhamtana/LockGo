@@ -9,7 +9,7 @@ export interface CompartmentSizeAvailability {
 }
 
 export interface LockerListItem {
-  id: string;
+  id: number;
   name: string;
   address: string;
   lat: number;
@@ -23,7 +23,7 @@ export interface LockerListItem {
 }
 
 export interface LockerDetail {
-  id: string;
+  id: number;
   name: string;
   address: string;
   lat: number;

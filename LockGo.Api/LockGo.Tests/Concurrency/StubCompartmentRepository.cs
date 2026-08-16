@@ -24,7 +24,7 @@ public class StubCompartmentRepository : ICompartmentRepository
     }
 
     public Task<Compartment?> FindAvailableAsync(
-        Guid lockerId,
+        int lockerId,
         CompartmentSize size,
         DateTimeOffset start,
         DateTimeOffset end,
@@ -38,6 +38,6 @@ public class StubCompartmentRepository : ICompartmentRepository
         return Task.FromResult(match);
     }
 
-    public Task<bool> ExistsForSizeAsync(Guid lockerId, CompartmentSize size, CancellationToken ct)
+    public Task<bool> ExistsForSizeAsync(int lockerId, CompartmentSize size, CancellationToken ct)
         => Task.FromResult(_compartments.Any(c => c.LockerId == lockerId && c.Size == size));
 }

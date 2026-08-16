@@ -65,7 +65,7 @@ from configuration.
 ```json
 {
   "token": "eyJhbGciOi...",
-  "userId": "b3f1c2b0-...",
+  "userId": 7,
   "firstName": "Jane",
   "lastName": "Doe",
   "email": "jane@example.com",
@@ -98,7 +98,7 @@ Search/filter lockers.
 ```json
 [
   {
-    "id": "b3f1c2b0-...",
+    "id": 4,
     "name": "LockGo Central Station",
     "address": "1 Silom Road, Bangkok",
     "lat": 13.7278,
@@ -137,7 +137,7 @@ Locker detail with its per-size availability.
 
 ```json
 {
-  "id": "b3f1c2b0-...",
+  "id": 4,
   "name": "LockGo Central Station",
   "address": "1 Silom Road, Bangkok",
   "lat": 13.7278,
@@ -174,7 +174,7 @@ availability-overlap check.
 
 ```json
 {
-  "lockerId": "b3f1c2b0-...",
+  "lockerId": 4,
   "size": "M",
   "durationHours": 2,
   "idempotencyKey": "b1f6c9de-2b2a-4e3a-9c0e-6e0b7a2f9a11",
@@ -184,7 +184,7 @@ availability-overlap check.
 
 | Field            | Type     | Constraints |
 |------------------|----------|-------------|
-| `lockerId`       | guid     | required |
+| `lockerId`       | int      | required |
 | `size`           | string   | `S` \| `M` \| `L` |
 | `durationHours`  | int      | 1–72 |
 | `idempotencyKey` | string   | required — a client-generated UUID, one per checkout attempt, reused across retries of that same attempt |
@@ -194,12 +194,12 @@ availability-overlap check.
 
 ```json
 {
-  "id": "f0a1...",
+  "id": 17,
   "bookingNumber": "LG-20260814-7K3N9P",
-  "lockerId": "b3f1c2b0-...",
+  "lockerId": 4,
   "lockerName": "LockGo Central Station",
   "lockerAddress": "1 Silom Road, Bangkok",
-  "compartmentId": "d4e9...",
+  "compartmentId": 12,
   "compartmentSize": "M",
   "price": 35,
   "startTime": "2026-08-14T09:00:00+00:00",
@@ -212,6 +212,9 @@ availability-overlap check.
 `compartmentId` identifies the specific compartment the server assigned —
 useful for the confirmation screen, but never something the client chooses.
 
+`id` is the sequential primary key. Use `bookingNumber` to fetch the
+reservation back — see the next endpoint for why.
+
 **Errors**
 
 | Status | Code                    | Cause |
@@ -223,7 +226,13 @@ useful for the confirmation screen, but never something the client chooses.
 
 ---
 
-## `GET /api/reservations/{id}`
+## `GET /api/reservations/{bookingNumber}`
+
+Keyed on `bookingNumber` (e.g. `LG-20260814-7K3N9P`), not the numeric `id`.
+Primary keys are sequential, and the confirmation URL is a shareable
+permalink — an incrementing id there would let anyone walk it to read other
+people's bookings. Booking numbers are generated with a cryptographically
+strong RNG over a 32-character alphabet, so they can't be guessed the same way.
 
 **200 OK** — same shape as the `POST` response above.
 

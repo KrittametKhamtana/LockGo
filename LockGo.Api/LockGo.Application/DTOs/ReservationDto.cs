@@ -1,12 +1,12 @@
 namespace LockGo.Application.DTOs;
 
 public record ReservationDto(
-    Guid Id,
+    int Id,
     string BookingNumber,
-    Guid LockerId,
+    int LockerId,
     string LockerName,
     string LockerAddress,
-    Guid CompartmentId,
+    int CompartmentId,
     string CompartmentSize,
     decimal Price,
     DateTimeOffset StartTime,

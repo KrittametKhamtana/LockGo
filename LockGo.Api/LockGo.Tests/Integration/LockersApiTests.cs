@@ -76,7 +76,7 @@ public class LockersApiTests : IClassFixture<LockGoWebApplicationFactory>, IAsyn
         // Size and availability have to be true of the SAME compartment, not
         // checked independently — that was a real bug: two separate Any() calls
         // let an available-but-wrong-size compartment satisfy the availability half.
-        Guid lockerId;
+        int lockerId;
         using (var scope = _factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<LockGoDbContext>();
@@ -105,7 +105,7 @@ public class LockersApiTests : IClassFixture<LockGoWebApplicationFactory>, IAsyn
     [Fact]
     public async Task GetLockers_WhenEveryCompartmentIsBooked_ReportsFullyBookedButStillOpen()
     {
-        Guid lockerId;
+        int lockerId;
         using (var scope = _factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<LockGoDbContext>();
@@ -135,7 +135,7 @@ public class LockersApiTests : IClassFixture<LockGoWebApplicationFactory>, IAsyn
     [Fact]
     public async Task GetLockers_WhenEveryCompartmentIsBooked_ExcludedByAvailabilityFilter()
     {
-        Guid lockerId;
+        int lockerId;
         using (var scope = _factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<LockGoDbContext>();
@@ -175,7 +175,7 @@ public class LockersApiTests : IClassFixture<LockGoWebApplicationFactory>, IAsyn
         // The whole point of advance booking: "full" is a property of a time
         // window, not of the locker. Booking every compartment for the next few
         // hours must not hide the locker from someone searching for next week.
-        Guid lockerId;
+        int lockerId;
         using (var scope = _factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<LockGoDbContext>();
@@ -204,7 +204,7 @@ public class LockersApiTests : IClassFixture<LockGoWebApplicationFactory>, IAsyn
     [Fact]
     public async Task GetLockerById_ReportsAvailabilityForTheRequestedWindow_NotJustNow()
     {
-        Guid lockerId;
+        int lockerId;
         var start = DateTimeOffset.UtcNow.AddDays(2);
 
         using (var scope = _factory.Services.CreateScope())
@@ -258,16 +258,16 @@ public class LockersApiTests : IClassFixture<LockGoWebApplicationFactory>, IAsyn
     [Fact]
     public async Task GetLockerById_WhenLockerDoesNotExist_Returns404WithErrorShape()
     {
-        var response = await _client.GetAsync($"/api/lockers/{Guid.NewGuid()}");
+        var response = await _client.GetAsync("/api/lockers/999999");
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         var body = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
         body!.Error.Code.Should().Be("LOCKER_NOT_FOUND");
     }
 
-    private static Domain.Entities.Reservation BuildActiveReservation(Guid compartmentId) => new()
+    private static Domain.Entities.Reservation BuildActiveReservation(int compartmentId) => new()
     {
-        Id = Guid.NewGuid(),
+        Id = Random.Shared.Next(1, int.MaxValue),
         BookingNumber = $"LG-TEST-{Guid.NewGuid():N}"[..20],
         UserId = Application.Common.MockUser.Id,
         CompartmentId = compartmentId,

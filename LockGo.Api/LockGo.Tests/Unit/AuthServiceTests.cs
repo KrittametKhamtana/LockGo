@@ -129,7 +129,7 @@ public class AuthServiceTests
     {
         var user = new User
         {
-            Id = Guid.NewGuid(),
+            Id = Random.Shared.Next(1, int.MaxValue),
             Name = "Jane Doe",
             FirstName = "Jane",
             LastName = "Doe",
@@ -150,7 +150,7 @@ public class AuthServiceTests
     {
         var user = new User
         {
-            Id = Guid.NewGuid(),
+            Id = Random.Shared.Next(1, int.MaxValue),
             Name = "Jane Doe",
             Username = "janedoe",
             PasswordHash = PasswordHasher.Hash("password123"),

@@ -15,7 +15,7 @@ public interface ICompartmentRepository
     /// without a second round-trip.
     /// </summary>
     Task<Compartment?> FindAvailableAsync(
-        Guid lockerId,
+        int lockerId,
         CompartmentSize size,
         DateTimeOffset start,
         DateTimeOffset end,
@@ -26,5 +26,5 @@ public interface ICompartmentRepository
     /// lets the booking path answer "fully booked" (409) separately from
     /// "this locker doesn't have that size" (404).
     /// </summary>
-    Task<bool> ExistsForSizeAsync(Guid lockerId, CompartmentSize size, CancellationToken ct);
+    Task<bool> ExistsForSizeAsync(int lockerId, CompartmentSize size, CancellationToken ct);
 }

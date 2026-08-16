@@ -34,7 +34,7 @@ export default function App() {
                 <Route index element={<FindLockerPage />} />
                 <Route path="lockers/:id" element={<LockerDetailPage />} />
                 <Route path="reservations/new" element={<ReservationPage />} />
-                <Route path="reservations/:id" element={<ConfirmationPage />} />
+                <Route path="reservations/:bookingNumber" element={<ConfirmationPage />} />
                 <Route path="signup" element={<SignUpPage />} />
                 <Route path="signin" element={<SignInPage />} />
                 <Route path="forgot-password" element={<ForgotPasswordPage />} />

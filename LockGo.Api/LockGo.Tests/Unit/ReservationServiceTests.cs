@@ -77,7 +77,7 @@ public class ReservationServiceTests
         NoExistingIdempotencyKey();
         NoAvailableCompartment();
         _compartmentRepository
-            .Setup(r => r.ExistsForSizeAsync(It.IsAny<Guid>(), It.IsAny<CompartmentSize>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.ExistsForSizeAsync(It.IsAny<int>(), It.IsAny<CompartmentSize>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         var request = new CreateReservationRequest(locker.Id, "L", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
@@ -133,7 +133,7 @@ public class ReservationServiceTests
     [InlineData(73)]
     public async Task CreateAsync_WhenDurationOutOfRange_ThrowsValidation(int durationHours)
     {
-        var request = new CreateReservationRequest(Guid.NewGuid(), "M", durationHours, Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
+        var request = new CreateReservationRequest(999999, "M", durationHours, Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
 
         await Assert.ThrowsAsync<ValidationAppException>(() => _sut.CreateAsync(request, CancellationToken.None));
 
@@ -168,7 +168,7 @@ public class ReservationServiceTests
     [Fact]
     public async Task CreateAsync_WhenStartTimeIsInThePast_ThrowsValidation()
     {
-        var request = new CreateReservationRequest(Guid.NewGuid(), "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow.AddHours(-1));
+        var request = new CreateReservationRequest(999999, "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow.AddHours(-1));
 
         await Assert.ThrowsAsync<ValidationAppException>(() => _sut.CreateAsync(request, CancellationToken.None));
 
@@ -198,7 +198,7 @@ public class ReservationServiceTests
     [Fact]
     public async Task CreateAsync_WhenStartTimeIsTooFarInTheFuture_ThrowsValidation()
     {
-        var request = new CreateReservationRequest(Guid.NewGuid(), "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow.AddDays(31));
+        var request = new CreateReservationRequest(999999, "M", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow.AddDays(31));
 
         await Assert.ThrowsAsync<ValidationAppException>(() => _sut.CreateAsync(request, CancellationToken.None));
 
@@ -208,7 +208,7 @@ public class ReservationServiceTests
     [Fact]
     public async Task CreateAsync_WhenSizeIsNotAValidCompartmentSize_ThrowsValidation()
     {
-        var request = new CreateReservationRequest(Guid.NewGuid(), "XL", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
+        var request = new CreateReservationRequest(999999, "XL", DurationHours: 2, IdempotencyKey: Guid.NewGuid().ToString(), StartTime: DateTimeOffset.UtcNow);
 
         await Assert.ThrowsAsync<ValidationAppException>(() => _sut.CreateAsync(request, CancellationToken.None));
     }
@@ -230,18 +230,18 @@ public class ReservationServiceTests
         result.Id.Should().Be(existing.Id);
         result.BookingNumber.Should().Be(existing.BookingNumber);
         _compartmentRepository.Verify(
-            r => r.FindAvailableAsync(It.IsAny<Guid>(), It.IsAny<CompartmentSize>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
+            r => r.FindAvailableAsync(It.IsAny<int>(), It.IsAny<CompartmentSize>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
             Times.Never);
         _reservationRepository.Verify(r => r.Add(It.IsAny<Reservation>()), Times.Never);
     }
 
     [Fact]
-    public async Task GetByIdAsync_WhenReservationDoesNotExist_ThrowsNotFound()
+    public async Task GetByBookingNumberAsync_WhenReservationDoesNotExist_ThrowsNotFound()
     {
-        _reservationRepository.Setup(r => r.GetByIdWithDetailsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+        _reservationRepository.Setup(r => r.GetByBookingNumberAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Reservation?)null);
 
-        await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetByIdAsync(Guid.NewGuid(), CancellationToken.None));
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetByBookingNumberAsync("LG-NOPE-000000", CancellationToken.None));
     }
 
     private void NoExistingIdempotencyKey() =>
@@ -250,14 +250,14 @@ public class ReservationServiceTests
 
     private void NoAvailableCompartment() =>
         _compartmentRepository
-            .Setup(r => r.FindAvailableAsync(It.IsAny<Guid>(), It.IsAny<CompartmentSize>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.FindAvailableAsync(It.IsAny<int>(), It.IsAny<CompartmentSize>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Compartment?)null);
 
     private static Reservation BuildReservation(Compartment compartment, string idempotencyKey) => new()
     {
-        Id = Guid.NewGuid(),
+        Id = Random.Shared.Next(1, int.MaxValue),
         BookingNumber = "LG-20260101-ABCDEF",
-        UserId = Guid.NewGuid(),
+        UserId = Random.Shared.Next(1, int.MaxValue),
         CompartmentId = compartment.Id,
         Compartment = compartment,
         StartTime = DateTimeOffset.UtcNow,

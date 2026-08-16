@@ -69,7 +69,7 @@ public class LockerServiceTests
         {
             new()
             {
-                Id = Guid.NewGuid(),
+                Id = Random.Shared.Next(1, int.MaxValue),
                 CompartmentId = compartment.Id,
                 Status = ReservationStatus.Active,
                 StartTime = DateTimeOffset.UtcNow.AddHours(-5),
@@ -119,7 +119,7 @@ public class LockerServiceTests
         {
             new()
             {
-                Id = Guid.NewGuid(),
+                Id = Random.Shared.Next(1, int.MaxValue),
                 CompartmentId = compartment.Id,
                 Status = ReservationStatus.Active,
                 StartTime = DateTimeOffset.UtcNow,

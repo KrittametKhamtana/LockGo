@@ -63,7 +63,7 @@ public class LockerService : ILockerService
             : items.ToList();
     }
 
-    public async Task<LockerDetailDto> GetByIdAsync(Guid id, BookingWindow window, CancellationToken ct)
+    public async Task<LockerDetailDto> GetByIdAsync(int id, BookingWindow window, CancellationToken ct)
     {
         var locker = await _lockerRepository.GetByIdAsync(id, window, ct)
             ?? throw new NotFoundException("LOCKER_NOT_FOUND", $"Locker '{id}' was not found.");
