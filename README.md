@@ -290,10 +290,9 @@ Schema reference (ERD, column/index detail, migrations):
    (uuid keys → sequential integers).
 
    ⚠️ **`SwitchToSequentialIntIds` drops and recreates all four tables** —
-   Postgres cannot cast `uuid` to `integer`, so the columns can't be altered
-   in place. Seed lockers/compartments come back on the next startup;
-   reservations and registered accounts do not. See
-   [`deliverables/DATABASE.md`](deliverables/DATABASE.md#migrations).
+   all existing data is lost. Seed lockers/compartments come back
+   automatically on the next startup; reservations and registered accounts
+   do not. See [`deliverables/DATABASE.md`](deliverables/DATABASE.md#migrations).
 
 4. Seed data is inserted automatically on startup — **idempotent per
    locker** (matched by name, not an all-or-nothing gate), so re-running

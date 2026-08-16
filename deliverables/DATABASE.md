@@ -136,11 +136,10 @@ Three migrations exist, all under
    foreign key changes from `uuid` to a sequential `integer` identity column,
    so ids are readable when querying the database directly.
 
-   **This one is destructive.** Postgres has no cast from `uuid` to `integer`,
-   so the columns cannot be altered in place — the migration drops and
-   recreates all four tables. Lockers and compartments come back on the next
+   **This one is destructive.** It drops and recreates all four tables, so
+   all existing data is lost. Lockers and compartments come back on the next
    startup (the seeder is idempotent); reservations and registered accounts
-   do not. It is written for a development database.
+   do not.
 
    Because sequential ids are trivially guessable, the public reservation
    lookup moved off the primary key: `GET /api/reservations/{bookingNumber}`
